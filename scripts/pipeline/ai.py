@@ -47,7 +47,7 @@ def generate_analysis(product: Dict[str, Any], geo: str = "FR") -> Dict[str, Any
     }
 
     # IMPORTANT: modèle large compat. Si tu veux moins cher, mets gpt-4o-mini
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    model = (os.environ.get("OPENAI_MODEL") or "").strip() or "gpt-4o-mini"
 
     resp = client.chat.completions.create(
         model=model,
