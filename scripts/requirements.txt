@@ -2,4 +2,4 @@ pytrends==4.9.2
 supabase==2.18.1
 openai==1.99.0
 python-slugify==8.0.4
-pydantic==2.11.0
+pydantic>=2.11.7,<3
