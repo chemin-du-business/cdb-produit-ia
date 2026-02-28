@@ -2,14 +2,16 @@ name: Weekly Run - CDB Produit IA
 
 on:
   schedule:
+    # Tous les lundis à 05:00 UTC (~06:00 Paris hiver)
     - cron: "0 5 * * 1"
   workflow_dispatch: {}
 
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -17,16 +19,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      - name: Run pipeline
+      - name: Run weekly pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           RUN_GEO: ${{ secrets.RUN_GEO }}
         run: |
           python -m scripts.weekly_run

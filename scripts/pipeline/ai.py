@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import os
+import json
 from typing import Any, Dict
 from openai import OpenAI
 
@@ -27,44 +29,47 @@ ANALYSIS_SCHEMA_HINT = {
 }
 
 def generate_analysis(product: Dict[str, Any], geo: str = "FR") -> Dict[str, Any]:
-    title = product["title"]
-    category = product.get("category", "autre")
-    tags = product.get("tags", [])
-    sources = product.get("sources", [])
-    signals = product.get("signals", {})
-
+    """
+    Compatible OpenAI SDK 1.14.x: uses chat.completions.
+    Returns JSON dict.
+    """
     instructions = (
-        "Tu es un expert e-commerce FR. Tu dois produire une analyse structurée JSON uniquement "
-        "pour un produit potentiel. Pas de texte hors JSON.\n"
-        f"Le marché cible est {geo}. Sois concret, orienté ads et page produit.\n"
-        "Respecte ce schéma (clés identiques) et remplis proprement."
+        "Tu es un expert e-commerce FR. "
+        "Réponds UNIQUEMENT en JSON valide, sans texte autour. "
+        f"Marché cible: {geo}. "
+        "Tu dois produire une analyse structurée du produit potentiel. "
+        "Respecte le schéma fourni (mêmes clés)."
     )
 
-    user_input = {
-        "product": {
-            "title": title,
-            "category": category,
-            "tags": tags,
-            "sources": sources,
-            "signals": signals
-        },
+    payload = {
+        "product": product,
         "schema": ANALYSIS_SCHEMA_HINT
     }
 
-    resp = client.responses.create(
-        model="gpt-5.2",
-        input=[
-            {"role": "system", "content": instructions},
-            {"role": "user", "content": str(user_input)},
-        ],
-        reasoning={"effort": "low"},
-    )
-    text = resp.output_text.strip()
+    # IMPORTANT: modèle large compat. Si tu veux moins cher, mets gpt-4o-mini
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
-    # robuste: si le modèle renvoie du JSON en texte
-    import json
+    resp = client.chat.completions.create(
+        model=model,
+        temperature=0.4,
+        messages=[
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ],
+    )
+
+    text = resp.choices[0].message.content.strip()
+
+    # Robust JSON parse
     try:
         return json.loads(text)
     except Exception:
-        # fallback minimal
+        # Try to extract JSON if model wrapped it
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                return json.loads(text[start:end+1])
+            except Exception:
+                pass
         return {"raw": text}
