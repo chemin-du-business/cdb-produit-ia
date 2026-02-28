@@ -29,4 +29,4 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           RUN_GEO: ${{ secrets.RUN_GEO }}
         run: |
-          python scripts/weekly_run.py
+          python -m scripts.weekly_run
