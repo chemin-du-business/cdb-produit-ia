@@ -1,17 +1,8 @@
 from __future__ import annotations
-from datetime import date, datetime, timezone
-from typing import Any, Dict
+from datetime import datetime, timezone
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def today_date() -> date:
-    return datetime.now(timezone.utc).date()
-
-def safe_get(d: Dict[str, Any], path: str, default=None):
-    cur = d
-    for part in path.split("."):
-        if not isinstance(cur, dict) or part not in cur:
-            return default
-        cur = cur[part]
-    return cur
+def clamp(n: int, a: int, b: int) -> int:
+    return max(a, min(b, n))

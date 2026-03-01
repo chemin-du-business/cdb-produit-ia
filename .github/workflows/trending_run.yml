@@ -1,0 +1,44 @@
+name: Weekly Run - TRENDING (V2.1 Premium)
+
+on:
+  schedule:
+    - cron: "0 5 * * 1" # lundi 05:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+
+      - name: Run TRENDING pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+
+          RUN_GEO: "FR"
+          TOP_N: "10"
+          ENRICH_TOP_K: "30"
+          MAX_PER_CATEGORY: "3"
+          SELLABLE_MIN_SCORE: "60"
+
+          SUPABASE_IMAGE_BUCKET: "product-images"
+          DOWNLOAD_IMAGES: "1"
+        run: |
+          python -m scripts.weekly_run
