@@ -1,8 +1,17 @@
-from __future__ import annotations
 from datetime import datetime, timezone
+from slugify import slugify
 
-def utc_now_iso() -> str:
+
+def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def clamp(n: int, a: int, b: int) -> int:
-    return max(a, min(b, n))
+
+def make_slug(text: str) -> str:
+    return slugify(text, lowercase=True, max_length=80)
+
+
+def safe_int(x, default=0) -> int:
+    try:
+        return int(x)
+    except Exception:
+        return default

@@ -1,125 +1,112 @@
-from __future__ import annotations
-import os, json, re
+import os
+import json
 from typing import Any, Dict
+
 from openai import OpenAI
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-def _model() -> str:
-    return (os.environ.get("OPENAI_MODEL") or "").strip() or "gpt-4o-mini"
+def _client() -> OpenAI:
+    return OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-BLOCK_PATTERNS = [
-    r"\brésultat\b", r"\bscore\b", r"\bmatch\b", r"\bligue\b", r"\bbut\b",
-    r"\bélection\b", r"\bprésident\b", r"\bministre\b", r"\bguerre\b", r"\battaque\b",
-    r"\bmétéo\b", r"\btrafic\b", r"\bgrève\b",
-    r"\baccident\b", r"\bmort\b", r"\bdécès\b",
-    r"\bfilm\b", r"\bsérie\b", r"\bacteur\b", r"\bactrice\b",
-    r"\bconcert\b", r"\bfestival\b",
-]
-BRAND_BLOCKLIST = ["iphone","samsung","ps5","playstation","xbox","netflix","disney","tesla","apple","meta"]
-_block_re = re.compile("|".join(BLOCK_PATTERNS), re.IGNORECASE)
 
-def quick_reject(term: str) -> bool:
-    t = (term or "").strip().lower()
-    if not t:
-        return True
-    if _block_re.search(t):
-        return True
-    if any(b in t for b in BRAND_BLOCKLIST):
-        return True
-    if len(t) < 3:
-        return True
-    return False
-
-def classify_sellability(term: str, geo: str = "FR") -> Dict[str, Any]:
-    term = (term or "").strip()
-    if not term:
-        return {"sellable": False, "score": 0, "reason": "empty"}
-    if quick_reject(term):
-        return {"sellable": False, "score": 0, "reason": "quick_reject"}
+def classify_product_gate(title: str, signals: Dict[str, Any]) -> Dict[str, Any]:
+    model = os.environ.get("OPENAI_MODEL")
+    if not model:
+        return {"ok": False, "error": "Missing OPENAI_MODEL"}
 
     prompt = {
-        "term": term,
-        "market": geo,
+        "title": title,
+        "signals": signals,
+        "task": "Decide if this is a sellable e-commerce product idea (not politics/news/sports/person). If yes return category+tags.",
+        "output_format": {
+            "is_product": "boolean",
+            "category": "string (beauty, home, kitchen, fitness, pets, baby, office, car, fashion, electronics, other)",
+            "tags": "array of short strings",
+            "reason": "short string",
+        },
         "rules": [
-            "sellable=true seulement si c'est un produit e-commerce concret vendable (objet/accessoire).",
-            "sellable=false si actu, politique, sport, people, marque, événement, service ou trop vague.",
-            "score = vendabilité 0-100 (100 = très vendable, démontrable en vidéo, achat impulsif).",
-            "Sois strict. Si doute, sellable=false."
+            "Reject if it is a person, politician, match, sport event, news topic, or generic non-product query",
+            "Prefer tangible product terms",
         ],
-        "output_json": {"sellable": True, "score": 75, "reason": "string"}
     }
 
-    resp = client.chat.completions.create(
-        model=_model(),
-        temperature=0,
+    resp = _client().chat.completions.create(
+        model=model,
         messages=[
-            {"role": "system", "content": "Réponds uniquement en JSON valide."},
-            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)}
-        ]
+            {"role": "system", "content": "You are a strict e-commerce product gatekeeper. Output ONLY valid JSON."},
+            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+        ],
+        temperature=0.2,
     )
 
-    txt = (resp.choices[0].message.content or "").strip()
+    content = resp.choices[0].message.content or "{}"
     try:
-        data = json.loads(txt)
-        sellable = bool(data.get("sellable", False))
-        score = int(data.get("score", 0) or 0)
-        reason = str(data.get("reason","") or "")
-        score = max(0, min(100, score))
-        return {"sellable": sellable and score > 0, "score": score, "reason": reason}
+        data = json.loads(content)
+        data["ok"] = True
+        return data
     except Exception:
-        return {"sellable": False, "score": 0, "reason": "json_parse_failed"}
+        return {"ok": False, "error": "Invalid JSON from model", "raw": content}
 
-ANALYSIS_SCHEMA = {
-    "positioning": {"main_promise": "", "target_customer": "", "problem_solved": "", "why_now": ""},
-    "angles": {
-        "hooks": ["", "", ""],
-        "objections": [{"objection": "", "response": ""}],
-        "ugc_script": {"script": "", "duration_seconds": 20}
-    },
-    "risks": [{"type": "", "level": "low", "note": ""}],
-    "recommendations": {
-        "price_range": {"min": 0, "max": 0, "currency": "EUR"},
-        "channels": ["TikTok Ads"],
-        "upsells": [""]
-    },
-    "confidence": {"score": 0, "reasons": [""]}
-}
 
-def generate_analysis(product_payload: Dict[str, Any], geo: str = "FR") -> Dict[str, Any]:
-    prompt = {
-        "market": geo,
-        "instructions": [
-            "Tu es un expert e-commerce. Réponds uniquement en JSON valide.",
-            "Tu dois respecter exactement le schéma fourni (mêmes clés).",
-            "Hooks style Minea: courts, punchy, orientés douleur/bénéfice.",
-            "Objections: 1 à 3 objections max + réponses courtes.",
-            "Risks: au moins 1 risque avec level low|medium|high.",
-            "Confidence.score: 1-10, cohérent avec les signaux (Trends/TikTok/Pinterest).",
-            "Price_range: réaliste en EUR pour test en publicité."
+def generate_analysis_json(item: Dict[str, Any]) -> Dict[str, Any]:
+    model = os.environ.get("OPENAI_MODEL")
+    if not model:
+        return {"summary": "", "error": "Missing OPENAI_MODEL"}
+
+    title = item.get("title", "")
+    category = item.get("category", "autre")
+    score = item.get("score", 0)
+    signals = item.get("signals", {})
+    breakdown = item.get("score_breakdown", {})
+
+    spec = {
+        "title": title,
+        "category": category,
+        "score": score,
+        "signals": signals,
+        "score_breakdown": breakdown,
+        "ui_sections_required": [
+            "positionnement (promesse, cible, problème résolu, pourquoi maintenant)",
+            "angles_hooks (2 hooks)",
+            "objections (1 objection + réponse)",
+            "risques (1 risque + niveau low/medium/high)",
+            "recommandations (prix conseillé, canaux, upsells)",
+            "confiance (score 1-10 + 2 raisons)",
+            "script_ugc_court (texte ~20s)",
         ],
-        "schema": ANALYSIS_SCHEMA,
-        "product": product_payload
+        "output_format_json": {
+            "summary": "string",
+            "positionnement": {
+                "promesse": "string",
+                "cible": "string",
+                "probleme_resolu": "string",
+                "pourquoi_maintenant": "string",
+            },
+            "angles_hooks": ["string", "string"],
+            "objections": {"objection": "string", "reponse": "string"},
+            "risques": {"risque": "string", "niveau": "low|medium|high"},
+            "recommandations": {
+                "prix_conseille": "string",
+                "canaux": ["string"],
+                "upsells": ["string"],
+            },
+            "confiance": {"score": "1-10 integer", "raisons": ["string", "string"]},
+            "script_ugc_court": {"texte": "string", "duree": "string"},
+            "source_url": "string or null",
+        },
     }
 
-    resp = client.chat.completions.create(
-        model=_model(),
-        temperature=0.4,
+    resp = _client().chat.completions.create(
+        model=model,
         messages=[
-            {"role": "system", "content": "Réponds uniquement en JSON valide."},
-            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)}
-        ]
+            {"role": "system", "content": "You are an e-commerce product analyst. Output ONLY valid JSON."},
+            {"role": "user", "content": json.dumps(spec, ensure_ascii=False)},
+        ],
+        temperature=0.5,
     )
 
-    txt = (resp.choices[0].message.content or "").strip()
+    content = resp.choices[0].message.content or "{}"
     try:
-        return json.loads(txt)
+        return json.loads(content)
     except Exception:
-        s = txt.find("{")
-        e = txt.rfind("}")
-        if s != -1 and e != -1 and e > s:
-            try:
-                return json.loads(txt[s:e+1])
-            except Exception:
-                pass
-        return {"raw": txt, "schema": ANALYSIS_SCHEMA}
+        return {"summary": "", "error": "Invalid JSON from model", "raw": content}

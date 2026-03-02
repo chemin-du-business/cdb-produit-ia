@@ -1,15 +1,15 @@
-name: Trending Run (V2.3)
+name: Weekly Run - TRENDING (V2.1 Premium)
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "0 7 * * 1" # lundi 07:00 UTC
+    - cron: "0 5 * * 1" # lundi 05:00 UTC
+  workflow_dispatch: {}
 
 jobs:
-  trending:
+  run:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -17,23 +17,28 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r scripts/requirements.txt
 
-      - name: Run trending pipeline
+      - name: Run TRENDING pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
-          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-          TRENDS_GEO: FR
-          TIKTOK_REGION: FR
-          TIKTOK_PUBLISH_TIME: "7"
-          TIKTOK_SORT_TYPE: "0"
-          TRENDING_LIMIT: "10"
-          SUPABASE_BUCKET: "product-images"
+
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+
+          RUN_GEO: "FR"
+          TOP_N: "10"
+          ENRICH_TOP_K: "30"
+          MAX_PER_CATEGORY: "3"
+          SELLABLE_MIN_SCORE: "60"
+
+          SUPABASE_IMAGE_BUCKET: "product-images"
+          DOWNLOAD_IMAGES: "1"
         run: |
           python -m scripts.weekly_run

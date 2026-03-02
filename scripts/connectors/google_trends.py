@@ -1,106 +1,107 @@
-from __future__ import annotations
-from typing import Any, Dict, List
+import os
+from typing import Dict, List, Any, Optional
 from pytrends.request import TrendReq
 
-MIN_CANDIDATES = 30
-
-ECOM_SEEDS = [
-    "produit viral tiktok",
-    "produit tendance",
-    "gadget tendance",
-    "nouveauté maison pratique",
-    "accessoire cuisine astucieux",
-    "innovation maison",
-    "accessoire voiture pratique",
-    "accessoire bureau ergonomique",
-    "produit beauté tendance",
-    "accessoire cheveux tendance",
-    "accessoire téléphone pratique",
-    "objet anti stress tendance",
-    "produit sport maison tendance",
-    "accessoire voyage pratique",
-    "idée cadeau utile",
+BROAD_SEEDS = [
+    "accessoire", "outil", "gadget", "maison", "cuisine", "beauté",
+    "sport", "fitness", "bébé", "animaux", "voiture", "bureau",
+    "voyage", "santé", "wellness", "organisation", "rangement"
 ]
 
-def _interest_max(pytrends: TrendReq, term: str, geo: str, timeframe: str) -> int:
+
+def _pytrends() -> TrendReq:
+    return TrendReq(hl="fr-FR", tz=360)
+
+
+def _trending_terms(geo: str) -> List[str]:
+    # pytrends trending_searches supports some pn values (e.g., "france")
+    # If geo is FR -> pn="france", else fallback.
+    pn = "france" if geo.upper() == "FR" else "united_states"
+    df = _pytrends().trending_searches(pn=pn)
+    return [str(x).strip() for x in df[0].tolist() if str(x).strip()]
+
+
+def _related_queries(seed: str, geo: str) -> List[str]:
+    pt = _pytrends()
+    pt.build_payload([seed], timeframe="now 7-d", geo=geo.upper())
+    rq = pt.related_queries()
+    out: List[str] = []
     try:
-        pytrends.build_payload([term], geo=geo, timeframe=timeframe)
-        it = pytrends.interest_over_time()
-        if it is not None and not it.empty and term in it.columns:
-            return int(it[term].max())
-    except Exception:
-        pass
-    return 0
-
-def _related_queries(pytrends: TrendReq, seed: str, cap: int = 10) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    try:
-        related = pytrends.related_queries()
-        data = related.get(seed, {})
-        top = data.get("top")
-        rising = data.get("rising")
-
-        def add_df(df, kind: str):
-            if df is None:
-                return
-            for _, row in df.head(cap).iterrows():
-                q = str(row.get("query", "")).strip()
-                if q:
-                    out.append({"query": q, "kind": kind})
-
-        add_df(top, "top")
-        add_df(rising, "rising")
+        top = rq.get(seed, {}).get("top")
+        if top is not None:
+            for q in top["query"].tolist():
+                if isinstance(q, str) and q.strip():
+                    out.append(q.strip())
     except Exception:
         pass
     return out
 
-def fetch_google_trends_candidates(geo: str = "FR", limit_trending: int = 25) -> List[Dict[str, Any]]:
-    pytrends = TrendReq(hl="fr-FR", tz=60)
-    timeframe = "today 1-m"
-    candidates: List[Dict[str, Any]] = []
 
-    trends: List[str] = []
-    try:
-        df = pytrends.trending_searches(pn="france")
-        trends = [str(x).strip() for x in df[0].tolist()][:limit_trending]
-    except Exception:
-        trends = []
+def enrich_single(title: str, geo: str) -> Dict[str, Any]:
+    """
+    Returns a compact signal for scoring:
+    - interest_score (0-100): normalized by peak
+    - peak: max interest
+    - avg: average interest
+    - slope: last - first (trend direction)
+    """
+    pt = _pytrends()
+    pt.build_payload([title], timeframe="now 7-d", geo=geo.upper())
+    df = pt.interest_over_time()
 
-    for trend in trends:
-        if not trend:
-            continue
-        interest = _interest_max(pytrends, trend, geo, timeframe)
-        rel = _related_queries(pytrends, trend, cap=10)
-        for item in rel:
-            candidates.append({
-                "title": item["query"],
-                "sources": ["google_trends"],
-                "signals": {
-                    "google_trends": {
-                        "seed": trend,
-                        "kind": item["kind"],
-                        "interest": interest,
-                        "timeframe": timeframe
-                    }
-                }
-            })
+    if df is None or df.empty or title not in df.columns:
+        return {"interest_score": 0, "peak": 0, "avg": 0, "slope": 0}
 
-    if len(candidates) < MIN_CANDIDATES:
-        for seed in ECOM_SEEDS:
-            interest = _interest_max(pytrends, seed, geo, timeframe)
-            rel = _related_queries(pytrends, seed, cap=10)
-            for item in rel:
-                candidates.append({
-                    "title": item["query"],
-                    "sources": ["google_trends"],
-                    "signals": {
-                        "google_trends": {
-                            "seed": seed,
-                            "kind": f"fallback_{item['kind']}",
-                            "interest": interest,
-                            "timeframe": timeframe
-                        }
-                    }
-                })
+    series = df[title].astype(float).tolist()
+    peak = max(series) if series else 0
+    avg = sum(series) / len(series) if series else 0
+    slope = (series[-1] - series[0]) if len(series) >= 2 else 0
 
-    return candidates
+    interest_score = 0
+    if peak > 0:
+        # combine avg and slope lightly
+        interest_score = min(100, int((avg / peak) * 70 + max(0, slope) * 0.3))
+
+    return {
+        "interest_score": int(interest_score),
+        "peak": int(peak),
+        "avg": int(avg),
+        "slope": float(round(slope, 3)),
+        "timeframe": "now 7-d",
+        "geo": geo.upper(),
+    }
+
+
+def fetch_google_trends_candidates(geo: str = "FR", min_candidates: int = 40) -> List[str]:
+    """
+    1) Pull trending searches
+    2) If insufficient, expand using related queries from broad seeds
+    """
+    seen = set()
+
+    base = _trending_terms(geo=geo)
+    out: List[str] = []
+    for t in base:
+        key = t.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(t)
+
+    # fallback
+    if len(out) < min_candidates:
+        for seed in BROAD_SEEDS:
+            for q in _related_queries(seed, geo=geo):
+                key = q.lower()
+                if key not in seen:
+                    seen.add(key)
+                    out.append(q)
+                if len(out) >= min_candidates:
+                    break
+            if len(out) >= min_candidates:
+                break
+
+    return out
+
+
+# allow weekly_run to call enrich_single via attribute access
+fetch_google_trends_candidates.enrich_single = enrich_single  # type: ignore[attr-defined]

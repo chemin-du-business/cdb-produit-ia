@@ -1,258 +1,206 @@
-from __future__ import annotations
-
 import os
+import json
+import time
 from datetime import date
 from typing import Any, Dict, List
-from slugify import slugify
 
 from scripts.connectors.google_trends import fetch_google_trends_candidates
-from scripts.connectors.pinterest import fetch_pinterest_signal
-from scripts.connectors.tiktok import fetch_tiktok_signal
-
-from scripts.pipeline.merge import merge_candidates
-from scripts.pipeline.scoring import compute_max_interest, score_candidate
-from scripts.pipeline.diversity import apply_category_diversity
-from scripts.pipeline.ai import classify_sellability, generate_analysis
-from scripts.pipeline.supabase_db import (
-    get_supabase,
-    upsert_products,
-    set_current_run,
-    insert_run_log,
+from scripts.connectors.tiktok_rapidapi import fetch_tiktok_signal
+from scripts.connectors.pinterest_rapidapi import fetch_pinterest_signal
+from scripts.connectors.image_downloader import download_image_bytes
+from scripts.pipeline.filters import (
+    basic_candidate_filter,
+    ai_product_gate,
 )
-from scripts.pipeline.utils import utc_now_iso
-from scripts.pipeline.images import download_image, upload_image_to_supabase
+from scripts.pipeline.scoring import score_candidate
+from scripts.pipeline.diversity import diversify_top_n
+from scripts.pipeline.ai import generate_analysis_json
+from scripts.pipeline.db import (
+    upsert_product,
+    upsert_run,
+    upload_image_to_storage,
+)
+from scripts.pipeline.utils import make_slug, now_iso, safe_int
 
 
-RUN_GEO = os.environ.get("RUN_GEO", "FR").strip() or "FR"
-RUN_MODE = os.environ.get("RUN_MODE", "trending").strip() or "trending"
-
-TOP_N = int(os.environ.get("TOP_N", "10"))
-ENRICH_TOP_K = int(os.environ.get("ENRICH_TOP_K", "30"))
-MAX_PER_CATEGORY = int(os.environ.get("MAX_PER_CATEGORY", "3"))
-SELLABLE_MIN_SCORE = int(os.environ.get("SELLABLE_MIN_SCORE", "60"))
-DOWNLOAD_IMAGES = os.environ.get("DOWNLOAD_IMAGES", "1") == "1"
+DEFAULT_LIMIT = 10
 
 
-def infer_category(title: str) -> str:
-    t = (title or "").lower()
-    if any(k in t for k in ["visage", "peau", "skincare", "brosse", "serum", "sérum", "creme", "crème", "beauté", "beaute"]):
-        return "beauté"
-    if any(k in t for k in ["lampe", "led", "veilleuse", "projecteur", "déco", "deco", "maison", "rangement", "organisateur"]):
-        return "maison"
-    if any(k in t for k in ["sport", "fitness", "muscu", "running", "yoga", "pilates"]):
-        return "fitness"
-    if any(k in t for k in ["cuisine", "airfryer", "air fryer", "poêle", "mixeur", "couteau", "planche"]):
-        return "cuisine"
-    if any(k in t for k in ["bébé", "bebe", "enfant", "maman", "grossesse"]):
-        return "bébé"
-    if any(k in t for k in ["chien", "chat", "animaux", "litière", "laisse", "harnais"]):
-        return "animaux"
-    if any(k in t for k in ["voiture", "auto", "moto"]):
-        return "auto"
-    return "autre"
+def main():
+    run_date = date.today().isoformat()
+    started_at = time.time()
 
+    limit = int(os.environ.get("TRENDING_LIMIT", DEFAULT_LIMIT))
+    geo = os.environ.get("TRENDS_GEO", "FR")
+    cold_mode = os.environ.get("COLD_MODE", "0") == "1"
 
-def tags_from_title(title: str) -> List[str]:
-    s = slugify(title)
-    parts = [p for p in s.split("-") if p]
-    return parts[:4] if parts else []
+    stats: Dict[str, Any] = {
+        "mode": "trending",
+        "geo": geo,
+        "limit": limit,
+        "started_at": now_iso(),
+        "cold_mode": cold_mode,
+    }
+    errors: List[Dict[str, Any]] = []
 
+    # 1) get candidates from trends (+ fallback seeds inside)
+    candidates = fetch_google_trends_candidates(geo=geo, min_candidates=40)
+    stats["candidates_raw"] = len(candidates)
 
-def main() -> None:
-    sb = get_supabase()
-    run_date = str(date.today())
-    mode = RUN_MODE if RUN_MODE in ("trending", "evergreen") else "trending"
+    # 2) basic filtering (no AI yet)
+    candidates = [c for c in candidates if basic_candidate_filter(c)]
+    stats["candidates_after_basic_filter"] = len(candidates)
 
-    stats: Dict[str, Any] = {"run_date": run_date, "geo": RUN_GEO, "mode": mode}
-    errors: Dict[str, Any] = {}
+    # 3) Enrich & score each candidate (multi-source)
+    scored: List[Dict[str, Any]] = []
 
-    try:
-        # 1) Collect candidates from Google Trends (current)
-        raw = fetch_google_trends_candidates(geo=RUN_GEO, limit_trending=25)
-        stats["candidates_raw"] = len(raw)
+    for title in candidates:
+        try:
+            slug = make_slug(title)
+            item: Dict[str, Any] = {
+                "title": title,
+                "slug": slug,
+                "sources": ["google_trends"],
+                "signals": {},
+            }
 
-        # 2) Merge/dedup
-        merged = merge_candidates(raw)
-        stats["candidates_merged"] = len(merged)
-
-        # 3) Filter sellable products (quick reject + IA sellability)
-        sellable: List[Dict[str, Any]] = []
-        rejected = 0
-
-        for c in merged:
-            title = c.get("title") or ""
-            verdict = classify_sellability(title, geo=RUN_GEO)
-
-            c.setdefault("signals", {})
-            c["signals"]["sellability"] = verdict
-
-            if verdict.get("sellable") and int(verdict.get("score", 0)) >= SELLABLE_MIN_SCORE:
-                sellable.append(c)
+            if cold_mode:
+                # minimal fake signals for debug
+                item["signals"]["google_trends"] = {"interest_score": 55, "peak": 72, "avg": 33, "slope": 0.4}
+                item["signals"]["tiktok"] = {"posts": 5, "views_median": 12000, "views_top": 90000, "likes_median": 900}
+                item["signals"]["pinterest"] = {"pins": 12, "best_image_url": None}
             else:
-                rejected += 1
+                gt = fetch_google_trends_candidates.enrich_single(title=title, geo=geo)  # type: ignore[attr-defined]
+                item["signals"]["google_trends"] = gt
 
-        stats["candidates_sellable"] = len(sellable)
-        stats["candidates_rejected"] = rejected
-        stats["sellable_min_score"] = SELLABLE_MIN_SCORE
+                tt = fetch_tiktok_signal(keyword=title)
+                if tt.get("ok"):
+                    item["signals"]["tiktok"] = tt["signal"]
+                    item["sources"].append("tiktok")
+                else:
+                    item["signals"]["tiktok"] = {"error": tt.get("error", "unknown")}
 
-        if not sellable:
-            # no results -> log partial and exit clean
-            insert_run_log(sb, run_date, "partial", stats, {"warn": "no sellable candidates"})
-            set_current_run(sb, run_date, mode)
-            print("No sellable candidates; done.")
-            return
+                pin = fetch_pinterest_signal(keyword=title, num=int(os.environ.get("PIN_NUM", "30")))
+                if pin.get("ok"):
+                    item["signals"]["pinterest"] = pin["signal"]
+                    item["sources"].append("pinterest")
+                else:
+                    item["signals"]["pinterest"] = {"error": pin.get("error", "unknown")}
 
-        # 4) Category & tags
-        for c in sellable:
-            c["category"] = c.get("category") or infer_category(c["title"])
-            c["tags"] = c.get("tags") or tags_from_title(c["title"])
-            c.setdefault("sources", [])
-            if "google_trends" not in c["sources"]:
-                c["sources"].append("google_trends")
+            # 4) score
+            scored_item = score_candidate(item)
+            scored.append(scored_item)
 
-        # 5) Pre-score (GT only)
-        max_interest_pre = compute_max_interest(sellable)
-        stats["max_interest_pre"] = max_interest_pre
+        except Exception as e:
+            errors.append({"title": title, "step": "score", "error": str(e)})
 
-        for c in sellable:
-            s = score_candidate(c, max_interest=max_interest_pre)
-            c["score"] = s["score"]
-            c["score_breakdown"] = s["score_breakdown"]
+    stats["scored_total"] = len(scored)
 
-        sellable.sort(key=lambda x: x.get("score", 0), reverse=True)
+    # 5) AI gate: product vendable (avant analyse longue)
+    gated: List[Dict[str, Any]] = []
+    for item in scored:
+        try:
+            gate = ai_product_gate(item)
+            if not gate.get("ok"):
+                # if AI fails, we keep but mark low confidence
+                item["analysis_gate"] = {"ok": False, "reason": gate.get("error", "ai_gate_failed")}
+                gated.append(item)
+                continue
 
-        # 6) Enrich top K with Pinterest + TikTok
-        to_enrich = sellable[:max(1, ENRICH_TOP_K)]
-        stats["enrich_top_k"] = len(to_enrich)
+            if gate["is_product"] is True:
+                item["category"] = gate.get("category", "autre")
+                item["tags"] = gate.get("tags", [])
+                item["analysis_gate"] = gate
+                gated.append(item)
+            else:
+                # rejected
+                continue
 
-        enriched: List[Dict[str, Any]] = []
+        except Exception as e:
+            errors.append({"title": item.get("title"), "step": "ai_gate", "error": str(e)})
 
-        for c in to_enrich:
-            title = c["title"]
-            c.setdefault("signals", {})
-            c.setdefault("sources", [])
+    stats["after_ai_gate"] = len(gated)
 
-            # Pinterest
-            pin = fetch_pinterest_signal(title, limit=25)
-            c["signals"]["pinterest"] = pin
-            if int(pin.get("pin_count", 0)) > 0 and "pinterest" not in c["sources"]:
-                c["sources"].append("pinterest")
-            if pin.get("image_url"):
-                c["image_url"] = pin.get("image_url")
-                c["image_source"] = "pinterest"
-                c["source_url"] = pin.get("source_url")
+    # 6) sort by score & diversify
+    gated.sort(key=lambda x: safe_int(x.get("score", 0)), reverse=True)
+    final_items = diversify_top_n(gated, top_n=limit, max_per_category=2)
+    stats["final_count"] = len(final_items)
 
-            # TikTok
-            tk = fetch_tiktok_signal(title, results_limit=20, proxy_country_code="FR")
-            c["signals"]["tiktok"] = tk
-            if int(tk.get("video_count", 0)) > 0 and "tiktok" not in c["sources"]:
-                c["sources"].append("tiktok")
+    # 7) Generate full analysis + image download/upload + DB upsert
+    inserted = 0
+    for item in final_items:
+        try:
+            title = item["title"]
+            slug = item["slug"]
 
-            enriched.append(c)
+            # Image: pinterest best image first
+            best_image_url = None
+            pin_sig = item.get("signals", {}).get("pinterest", {})
+            if isinstance(pin_sig, dict):
+                best_image_url = pin_sig.get("best_image_url")
 
-        stats["candidates_enriched"] = len(enriched)
+            image_url_db = None
+            image_source = None
 
-        # 7) Final scoring (GT + Pinterest + TikTok)
-        max_interest = compute_max_interest(enriched)
-        stats["max_interest"] = max_interest
-
-        for c in enriched:
-            s = score_candidate(c, max_interest=max_interest)
-            c["score"] = s["score"]
-            c["score_breakdown"] = s["score_breakdown"]
-
-        enriched.sort(key=lambda x: x.get("score", 0), reverse=True)
-
-        # 8) Diversity by category
-        diversified = apply_category_diversity(enriched, max_per_category=MAX_PER_CATEGORY)
-        stats["after_diversity"] = len(diversified)
-
-        # 9) Select winners
-        winners = diversified[:TOP_N]
-        stats["topN"] = len(winners)
-
-        rows: List[Dict[str, Any]] = []
-        images_uploaded = 0
-
-        for w in winners:
-            title = w["title"]
-            slug = slugify(title)[:80]
-
-            final_image_url = w.get("image_url")
-            final_image_source = w.get("image_source")
-            final_source_url = w.get("source_url")
-
-            # Download Pinterest image and upload to Supabase Storage for stable URL
-            if DOWNLOAD_IMAGES and final_image_url and final_image_source == "pinterest":
-                img_bytes, content_type = download_image(final_image_url)
+            if best_image_url and not cold_mode:
+                img_bytes, content_type = download_image_bytes(best_image_url)
                 if img_bytes:
-                    public_url = upload_image_to_supabase(
-                        sb,
+                    public_url = upload_image_to_storage(
                         slug=slug,
                         image_bytes=img_bytes,
                         content_type=content_type or "image/jpeg",
-                        source="pinterest",
                     )
                     if public_url:
-                        final_image_url = public_url
-                        images_uploaded += 1
+                        image_url_db = public_url
+                        image_source = "pinterest"
 
-            # IA analysis for UI blocks
-            analysis = generate_analysis(
-                {
-                    "title": title,
-                    "category": w.get("category", "autre"),
-                    "tags": w.get("tags", []),
-                    "score": int(w.get("score", 0)),
-                    "score_breakdown": w.get("score_breakdown", {}),
-                    "sources": w.get("sources", []),
-                    "signals": w.get("signals", {}),
-                },
-                geo=RUN_GEO,
-            )
+            # AI analysis (UI JSON)
+            analysis_json = generate_analysis_json(item)
 
-            # Summary for cards (use main promise)
-            summary = ""
-            try:
-                summary = (analysis.get("positioning", {}) or {}).get("main_promise", "") or ""
-            except Exception:
-                summary = ""
+            product_row = {
+                "run_date": run_date,
+                "title": title,
+                "slug": slug,
+                "category": item.get("category", "autre"),
+                "tags": item.get("tags", []),
+                "sources": item.get("sources", []),
+                "score": int(item.get("score", 0)),
+                "score_breakdown": item.get("score_breakdown", {}),
+                "summary": analysis_json.get("summary", ""),
+                "signals": item.get("signals", {}),
+                "analysis": analysis_json,
+                "image_url": image_url_db,
+                "image_source": image_source,
+                "source_url": analysis_json.get("source_url"),
+                "published_at": None,
+                "is_hidden": False,
+            }
 
-            rows.append(
-                {
-                    "mode": mode,  # ✅ you added mode in DB
-                    "run_date": run_date,
-                    "title": title,
-                    "slug": slug,
-                    "category": w.get("category", "autre"),
-                    "tags": w.get("tags", []),
-                    "sources": w.get("sources", []),
-                    "score": int(w.get("score", 0)),
-                    "score_breakdown": w.get("score_breakdown", {}),
-                    "summary": summary,
-                    "signals": w.get("signals", {}),
-                    "analysis": analysis,
-                    "image_url": final_image_url,
-                    "image_source": final_image_source,
-                    "source_url": final_source_url,
-                    "is_hidden": False,
-                    "published_at": utc_now_iso(),
-                }
-            )
+            upsert_product(product_row)
+            inserted += 1
 
-        stats["images_uploaded"] = images_uploaded
+        except Exception as e:
+            errors.append({"title": item.get("title"), "step": "db_upsert", "error": str(e)})
 
-        # 10) Write to DB
-        upsert_products(sb, rows)
-        set_current_run(sb, run_date, mode)
-        insert_run_log(sb, run_date, "success", stats, errors)
+    stats["inserted"] = inserted
+    stats["errors_count"] = len(errors)
+    stats["runtime_sec"] = round(time.time() - started_at, 2)
+    stats["finished_at"] = now_iso()
 
-        print("OK ✅", stats)
+    # 8) run log
+    status = "success"
+    if errors and inserted > 0:
+        status = "partial"
+    if inserted == 0 and errors:
+        status = "fail"
 
-    except Exception as e:
-        errors["fatal"] = str(e)
-        insert_run_log(sb, run_date, "fail", stats, errors)
-        raise
+    upsert_run(run_date=run_date, status=status, stats=stats, errors=errors)
+
+    print(json.dumps({"status": status, "stats": stats, "errors": errors[:3]}, ensure_ascii=False, indent=2))
+
+    # fail CI if totally fail
+    if status == "fail":
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

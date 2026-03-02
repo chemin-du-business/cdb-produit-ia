@@ -1,118 +1,71 @@
-from __future__ import annotations
-from typing import Any, Dict, List
+from typing import Any, Dict
+from scripts.pipeline.utils import safe_int
 
-MONETIZATION_KEYWORDS = [
-    "kit", "set", "pack", "starter", "pro", "premium",
-    "appareil", "machine", "dispositif", "système", "systeme",
-    "lampe", "projecteur", "aspirateur", "diffuseur",
-    "outil", "pistolet", "brosse", "tondeuse", "mousseur",
-    "support", "organisateur", "rangement", "étagère", "etagere",
-    "chargeur", "station", "dock", "magnétique", "magnetique",
-]
 
-SATURATION_BLOCK = [
-    "iphone", "samsung", "ps5", "xbox", "playstation", "macbook",
-    "netflix", "disney", "tesla", "airpods",
-]
+def _clip(n: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, n))
 
-def compute_max_interest(cands: List[Dict[str, Any]]) -> int:
-    m = 0
-    for c in cands:
-        gt = (c.get("signals") or {}).get("google_trends", {}) or {}
-        interest = int(gt.get("interest", 0) or 0)
-        if interest > m:
-            m = interest
-    return m or 100
 
-def _safe_int(x: Any) -> int:
-    try:
-        return int(x or 0)
-    except Exception:
-        return 0
+def score_candidate(item: Dict[str, Any]) -> Dict[str, Any]:
+    signals = item.get("signals", {})
 
-def _contains_any(title: str, words: List[str]) -> bool:
-    t = (title or "").lower()
-    return any(w in t for w in words)
+    gt = signals.get("google_trends", {}) if isinstance(signals.get("google_trends"), dict) else {}
+    tt = signals.get("tiktok", {}) if isinstance(signals.get("tiktok"), dict) else {}
+    pin = signals.get("pinterest", {}) if isinstance(signals.get("pinterest"), dict) else {}
 
-def score_candidate(c: Dict[str, Any], max_interest: int) -> Dict[str, Any]:
-    title = c.get("title") or ""
-    sources: List[str] = c.get("sources", []) or []
-    signals = c.get("signals") or {}
+    # --- Google Trends component (0-35)
+    interest = safe_int(gt.get("interest_score", 0))
+    peak = safe_int(gt.get("peak", 0))
+    slope = float(gt.get("slope", 0) or 0)
 
-    breakdown = {
-        "trends": 0,
-        "momentum": 0,
-        "pinterest": 0,
-        "tiktok": 0,
-        "repeatability": 0,
-        "monetization": 0,
-        "saturation_penalty": 0,
-        "multi": 0,
-    }
+    gt_score = _clip((interest * 0.6) + (peak * 0.2) + (max(0.0, slope) * 10.0), 0, 35)
 
-    # Google Trends (0..35) + momentum (0..7)
-    if "google_trends" in sources:
-        gt = signals.get("google_trends", {}) or {}
-        interest = _safe_int(gt.get("interest", 0))
-        kind = (gt.get("kind") or "").lower()
-        breakdown["trends"] = round((interest / max_interest) * 35)
-        if "rising" in kind:
-            breakdown["momentum"] = 7
-        elif "top" in kind:
-            breakdown["momentum"] = 4
+    # --- TikTok component (0-40)
+    posts = safe_int(tt.get("posts", 0))
+    views_med = safe_int(tt.get("views_median", 0))
+    views_top = safe_int(tt.get("views_top", 0))
+    likes_med = safe_int(tt.get("likes_median", 0))
 
-    # Pinterest (0..18)
-    pin = signals.get("pinterest", {}) or {}
-    pin_count = _safe_int(pin.get("pin_count", 0))
-    saves = _safe_int(pin.get("save_count", 0)) + _safe_int(pin.get("repin_count", 0))
-    breakdown["pinterest"] = min(18, min(12, pin_count // 2) + min(6, saves // 100))
+    # normalize views roughly (log-ish without log):
+    # 10k-> ok, 100k-> strong, 1M-> very strong
+    def norm_views(v: int) -> float:
+        if v <= 0:
+            return 0
+        if v < 10_000:
+            return v / 10_000 * 10
+        if v < 100_000:
+            return 10 + (v - 10_000) / 90_000 * 15
+        if v < 1_000_000:
+            return 25 + (v - 100_000) / 900_000 * 10
+        return 35
 
-    # TikTok (0..18)
-    tk = signals.get("tiktok", {}) or {}
-    views = _safe_int(tk.get("views", 0))
-    likes = _safe_int(tk.get("likes", 0))
-    comments = _safe_int(tk.get("comments", 0))
-    shares = _safe_int(tk.get("shares", 0))
-    video_count = _safe_int(tk.get("video_count", 0))
-
-    volume_pts = min(10, views // 200_000)
-    eng_pts = 0
-    if views > 0 and (likes + comments + shares) > 0:
-        eng = (likes + 2 * comments + 3 * shares) / max(1, views)
-        eng_pts = min(8, int(eng * 100))
-    breakdown["tiktok"] = min(18, volume_pts + min(8, eng_pts))
-
-    # Repeatability (0..10)
-    rep_tk = min(6, video_count // 10)
-    rep_pin = min(4, pin_count // 10)
-    breakdown["repeatability"] = rep_tk + rep_pin
-
-    # Monetization (0..7)
-    breakdown["monetization"] = 7 if _contains_any(title, MONETIZATION_KEYWORDS) else 0
-
-    # Saturation penalty (-10..0)
-    penalty = 0
-    if _contains_any(title, SATURATION_BLOCK):
-        penalty = -10
-    if views >= 5_000_000:
-        eng = (likes + 2 * comments + 3 * shares) / max(1, views) if (likes + comments + shares) > 0 else 0
-        if eng < 0.01:
-            penalty = min(penalty, -6)
-    breakdown["saturation_penalty"] = penalty
-
-    # Multi-source bonus (0..5)
-    if len(set(sources)) >= 2:
-        breakdown["multi"] = 5
-
-    score = (
-        breakdown["trends"]
-        + breakdown["momentum"]
-        + breakdown["pinterest"]
-        + breakdown["tiktok"]
-        + breakdown["repeatability"]
-        + breakdown["monetization"]
-        + breakdown["multi"]
-        + breakdown["saturation_penalty"]
+    tt_score = _clip(
+        norm_views(views_med) + norm_views(views_top) * 0.5 + _clip(posts, 0, 20) * 0.3,
+        0, 40
     )
-    score = max(0, min(100, int(score)))
-    return {"score": score, "score_breakdown": breakdown}
+
+    # penalty if "too viral" but weak engagement (rough)
+    # if top views huge but likes median very low -> suspicious / oversaturated
+    penalty = 0
+    if views_top > 2_000_000 and likes_med < 2000:
+        penalty += 6
+    if views_top > 5_000_000:
+        penalty += 4
+
+    # --- Pinterest component (0-25)
+    pins = safe_int(pin.get("pins", 0))
+    pinner_fc_med = safe_int(pin.get("pinner_followers_median", 0))
+
+    pin_score = _clip((pins / 30) * 15 + _clip(pinner_fc_med / 1000, 0, 10), 0, 25)
+
+    total = int(_clip(gt_score + tt_score + pin_score - penalty, 0, 100))
+
+    item["score"] = total
+    item["score_breakdown"] = {
+        "google_trends": round(gt_score, 2),
+        "tiktok": round(tt_score, 2),
+        "pinterest": round(pin_score, 2),
+        "penalty": penalty,
+        "total": total,
+    }
+    return item
