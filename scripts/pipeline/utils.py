@@ -1,17 +1,17 @@
-from datetime import datetime, timezone
-from slugify import slugify
+from __future__ import annotations
+from datetime import date, datetime, timezone
+from typing import Any, Dict
 
-
-def now_iso() -> str:
+def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+def today_date() -> date:
+    return datetime.now(timezone.utc).date()
 
-def make_slug(text: str) -> str:
-    return slugify(text, lowercase=True, max_length=80)
-
-
-def safe_int(x, default=0) -> int:
-    try:
-        return int(x)
-    except Exception:
-        return default
+def safe_get(d: Dict[str, Any], path: str, default=None):
+    cur = d
+    for part in path.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return default
+        cur = cur[part]
+    return cur

@@ -1,0 +1,36 @@
+name: Weekly Product Radar
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Tous les lundis à 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  run-weekly:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+
+      - name: Run pipeline
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-4o-mini
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TOP_N: "20"
+          MAX_PER_CATEGORY: "3"
+          RUN_GEO: "FR"
+        run: |
+          python -m scripts.weekly_run
