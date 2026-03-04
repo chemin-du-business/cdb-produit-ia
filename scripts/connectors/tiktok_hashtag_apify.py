@@ -13,6 +13,10 @@ UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
 )
 
+# -----------------------
+# Config helpers
+# -----------------------
+
 def _apify_token() -> str:
     tok = (os.environ.get("APIFY_TOKEN") or "").strip()
     if not tok:
@@ -20,11 +24,15 @@ def _apify_token() -> str:
     return tok
 
 def _actor_id() -> str:
-    # IMPORTANT: doit être comme dans Apify: "clockworks/tiktok-hashtag-scraper"
+    # exemple: "clockworks/tiktok-hashtag-scraper"
     return (os.environ.get("APIFY_ACTOR_ID") or "clockworks/tiktok-hashtag-scraper").strip()
 
 def _timeout_seconds() -> int:
-    return int(os.environ.get("APIFY_TIMEOUT_SECONDS") or "240")
+    # Mets 900 dans GitHub Actions si tu download les vidéos
+    return int(os.environ.get("APIFY_TIMEOUT_SECONDS") or "900")
+
+def _poll_interval_seconds() -> int:
+    return int(os.environ.get("APIFY_POLL_SECONDS") or "4")
 
 def _hashtags() -> List[str]:
     raw = (os.environ.get("TIKTOK_HASHTAGS") or "").strip()
@@ -33,31 +41,56 @@ def _hashtags() -> List[str]:
     return ["tiktokmademebuyit", "amazonfinds", "viralproducts", "tiktokshopfinds", "gadgets"]
 
 def _max_posts_per_hashtag() -> int:
-    return int(os.environ.get("TIKTOK_MAX_POSTS_PER_HASHTAG") or "80")
+    return int(os.environ.get("TIKTOK_MAX_POSTS_PER_HASHTAG") or "40")
 
 def _limit_total() -> int:
-    return int(os.environ.get("TIKTOK_VIDEOS_LIMIT") or "250")
+    return int(os.environ.get("TIKTOK_VIDEOS_LIMIT") or "200")
 
+# -----------------------
+# HTTP helper (petit retry)
+# -----------------------
+
+def _request_with_retry(method: str, url: str, **kwargs) -> requests.Response:
+    retries = int(os.environ.get("APIFY_HTTP_RETRIES") or "3")
+    backoff = float(os.environ.get("APIFY_HTTP_BACKOFF") or "2.0")
+
+    last_exc = None
+    for i in range(retries):
+        try:
+            r = requests.request(method, url, **kwargs)
+            # retry sur 502/503/504
+            if r.status_code in (502, 503, 504):
+                time.sleep(backoff * (i + 1))
+                continue
+            return r
+        except Exception as e:
+            last_exc = e
+            time.sleep(backoff * (i + 1))
+    raise RuntimeError(f"HTTP failed after retries: {url} ({last_exc})")
+
+# -----------------------
+# Apify runner
+# -----------------------
 
 def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     token = _apify_token()
+    actor_id_enc = quote(actor_id, safe="")  # encode "/" => "%2F"
 
-    # ✅ FIX: encoder actor_id (le "/" doit devenir "%2F")
-    actor_id_enc = quote(actor_id, safe="")  # "clockworks/tiktok-hashtag-scraper" -> "clockworks%2Ftiktok-hashtag-scraper"
-
-    r = requests.post(
-        f"{APIFY_API_BASE}/acts/{actor_id_enc}/runs?token={token}",
+    # 1) start run
+    start_url = f"{APIFY_API_BASE}/acts/{actor_id_enc}/runs?token={token}"
+    r = _request_with_retry(
+        "POST",
+        start_url,
         json=input_payload,
         timeout=30,
         headers={"User-Agent": UA},
     )
 
-    # utile pour debug si ça recasse
     if r.status_code == 404:
         raise RuntimeError(
-            f"Apify 404 sur Actor. Vérifie APIFY_ACTOR_ID.\n"
+            "Apify 404 sur Actor. Vérifie APIFY_ACTOR_ID.\n"
             f"Actor reçu: {actor_id}\n"
-            f"URL appelée: {APIFY_API_BASE}/acts/{actor_id_enc}/runs\n"
+            f"URL appelée: {start_url}\n"
             f"Réponse: {r.text[:300]}"
         )
 
@@ -68,39 +101,64 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
     if not run_id:
         raise RuntimeError("Apify: run_id introuvable.")
 
+    # 2) poll status
     deadline = time.time() + _timeout_seconds()
-    status = "RUNNING"
+    poll = _poll_interval_seconds()
 
-    while time.time() < deadline:
-        rr = requests.get(
+    status = "RUNNING"
+    run_data: Dict[str, Any] = {}
+
+    print(f"[Apify] run started: {run_id}")
+
+    while True:
+        if time.time() > deadline:
+            # run pas fini à temps
+            raise RuntimeError(
+                f"Apify run pas terminé à temps (status={status}). run_id={run_id}. "
+                "Augmente APIFY_TIMEOUT_SECONDS (ex: 900) ou réduis TIKTOK_MAX_POSTS_PER_HASHTAG."
+            )
+
+        rr = _request_with_retry(
+            "GET",
             f"{APIFY_API_BASE}/actor-runs/{run_id}?token={token}",
             timeout=30,
             headers={"User-Agent": UA},
         )
         rr.raise_for_status()
-        data = (rr.json() or {}).get("data") or {}
-        status = data.get("status") or status
-        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-            run = data
+
+        run_data = (rr.json() or {}).get("data") or {}
+        status = run_data.get("status") or status
+
+        if status == "SUCCEEDED":
             break
-        time.sleep(3)
 
-    if status != "SUCCEEDED":
-        raise RuntimeError(f"Apify run non réussi: {status}")
+        if status in ("FAILED", "ABORTED", "TIMED-OUT"):
+            raise RuntimeError(f"Apify run terminé en erreur: {status}. run_id={run_id}")
 
-    dataset_id = run.get("defaultDatasetId")
+        remaining = int(deadline - time.time())
+        print(f"[Apify] status={status} (remaining {remaining}s)")
+        time.sleep(poll)
+
+    # 3) get dataset items
+    dataset_id = run_data.get("defaultDatasetId")
     if not dataset_id:
         raise RuntimeError("Apify: defaultDatasetId introuvable.")
 
-    it = requests.get(
-        f"{APIFY_API_BASE}/datasets/{dataset_id}/items?token={token}&clean=true",
-        timeout=60,
+    items_url = f"{APIFY_API_BASE}/datasets/{dataset_id}/items?token={token}&clean=true"
+    it = _request_with_retry(
+        "GET",
+        items_url,
+        timeout=90,
         headers={"User-Agent": UA},
     )
     it.raise_for_status()
+
     items = it.json()
     return items if isinstance(items, list) else []
 
+# -----------------------
+# Public API
+# -----------------------
 
 def fetch_tiktok_hashtag_videos() -> List[Dict[str, Any]]:
     actor_id = _actor_id()
@@ -110,12 +168,11 @@ def fetch_tiktok_hashtag_videos() -> List[Dict[str, Any]]:
     input_payload = {
         "hashtags": hashtags,
         "maxPostsPerHashtag": max_posts,
-        "shouldDownloadVideos": True
+        "shouldDownloadVideos": True,
     }
 
     items = run_actor_and_get_items(actor_id, input_payload)
-    return items[:_limit_total()]
-
+    return items[: _limit_total()]
 
 def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
     videos = fetch_tiktok_hashtag_videos()
@@ -145,6 +202,9 @@ def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
         created = v.get("createTimeISO")
         duration = v.get("videoMeta.duration")
 
+        # IMPORTANT: ces champs peuvent varier selon l’actor
+        video_download = v.get("videoUrl") or v.get("downloadUrl") or v.get("videoDownloadUrl")
+
         out.append(
             {
                 "title": caption,
@@ -152,7 +212,7 @@ def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
                 "signals": {
                     "tiktok_hashtag": {
                         "video_url": url,
-                        "video_download": v.get("videoUrl") or v.get("downloadUrl"),
+                        "video_download": video_download,
                         "author": author,
                         "created_at": created,
                         "duration_seconds": duration,

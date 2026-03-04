@@ -2,10 +2,14 @@ name: Weekly Run V3
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # lundi 06:00 UTC (optionnel)
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+
     steps:
       - uses: actions/checkout@v4
 
@@ -22,11 +26,26 @@ jobs:
         env:
           RUN_REGION: "FR"
           TOP_N: "20"
+
+          # --- Apify (STABILITÉ) ---
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           TIKTOK_HASHTAGS: ${{ secrets.TIKTOK_HASHTAGS }}
+
+          APIFY_TIMEOUT_SECONDS: "900"
+          APIFY_POLL_SECONDS: "4"
+          APIFY_HTTP_RETRIES: "3"
+          APIFY_HTTP_BACKOFF: "2.0"
+
+          # Limite la charge pour éviter RUNNING trop long
+          TIKTOK_MAX_POSTS_PER_HASHTAG: "40"
+          TIKTOK_VIDEOS_LIMIT: "200"
+
+          # --- Supabase ---
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+          # --- OpenAI ---
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
         run: |
