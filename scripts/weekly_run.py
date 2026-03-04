@@ -13,13 +13,22 @@ from scripts.pipeline.merge import merge_candidates
 from scripts.pipeline.scoring import compute_max_interest, score_candidate
 from scripts.pipeline.diversity import apply_category_diversity
 from scripts.pipeline.ai import is_sellable_product, generate_analysis
-from scripts.pipeline.supabase_db import get_supabase, upsert_products, set_current_run_date, insert_run_log
+from scripts.pipeline.supabase_db import (
+    get_supabase,
+    upsert_products,
+    set_current_run_date,
+    insert_run_log,
+)
 from scripts.pipeline.utils import utc_now_iso
 
 
 TOP_N = int(os.environ.get("TOP_N", "20"))
 MAX_PER_CATEGORY = int(os.environ.get("MAX_PER_CATEGORY", "3"))
 GEO = os.environ.get("RUN_GEO", "FR")
+
+# si on a moins que ça en "social validated", on complète avec Trends-only
+MIN_SOCIAL_WINNERS = int(os.environ.get("MIN_SOCIAL_WINNERS", "8"))
+MAX_TRENDS_ONLY_FALLBACK = int(os.environ.get("MAX_TRENDS_ONLY_FALLBACK", "8"))
 
 
 BAD_TERMS = [
@@ -42,51 +51,50 @@ GENERIC_TERMS = [
 
 
 def is_bad_title(title: str) -> bool:
-
     t = title.lower()
 
     if any(x in t for x in BAD_TERMS):
         return True
 
+    # "accessoire de X" etc. trop générique si court
     if any(x in t for x in GENERIC_TERMS) and len(t.split()) <= 3:
         return True
 
+    # trop court => pas assez spécifique
     if len(t.split()) <= 2:
         return True
 
     return False
 
 
-def infer_category(title: str):
-
+def infer_category(title: str) -> str:
     t = title.lower()
 
-    if any(k in t for k in ["visage","peau","skincare","brosse","serum","crème","beaut"]):
+    if any(k in t for k in ["visage", "peau", "skincare", "brosse", "serum", "crème", "beaut"]):
         return "beauté"
 
-    if any(k in t for k in ["lampe","led","veilleuse","projecteur","déco","maison"]):
+    if any(k in t for k in ["lampe", "led", "veilleuse", "projecteur", "déco", "deco", "maison"]):
         return "maison"
 
-    if any(k in t for k in ["sport","fitness","muscu","running","gourde","shaker"]):
+    if any(k in t for k in ["sport", "fitness", "muscu", "running", "gourde", "shaker"]):
         return "fitness"
 
-    if any(k in t for k in ["cuisine","air fryer","poêle","mixeur","couteau"]):
+    if any(k in t for k in ["cuisine", "air fryer", "poêle", "poele", "mixeur", "couteau"]):
         return "cuisine"
 
-    if any(k in t for k in ["bébé","bebe","enfant","maman"]):
+    if any(k in t for k in ["bébé", "bebe", "enfant", "maman"]):
         return "bébé"
 
-    if any(k in t for k in ["chien","chat","animaux","litière","laisse"]):
+    if any(k in t for k in ["chien", "chat", "animaux", "litière", "litiere", "laisse"]):
         return "animaux"
 
-    if any(k in t for k in ["voiture","auto","moto"]):
+    if any(k in t for k in ["voiture", "auto", "moto"]):
         return "auto"
 
     return "autre"
 
 
-def main():
-
+def main() -> None:
     sb = get_supabase()
     run_date = str(date.today())
 
@@ -94,24 +102,20 @@ def main():
     errors: Dict[str, Any] = {}
 
     try:
-
-        # 1️⃣ Collect trends
+        # 1) Collect trends
         raw = fetch_google_trends_candidates(geo=GEO, limit_trending=25)
-
         stats["candidates_raw"] = len(raw)
 
-        # 2️⃣ Merge
+        # 2) Merge
         merged = merge_candidates(raw)
-
         stats["candidates_merged"] = len(merged)
 
-        # 3️⃣ Filter produits vendables
-
+        # 3) Filter produits vendables (avec IA)
         sellable: List[Dict[str, Any]] = []
-
         for c in merged:
-
-            title = c["title"]
+            title = c.get("title", "")
+            if not title:
+                continue
 
             if is_bad_title(title):
                 continue
@@ -123,30 +127,23 @@ def main():
 
         stats["candidates_sellable"] = len(sellable)
 
-        # 4️⃣ Enrich social signals
-
+        # 4) Enrich social signals
         enriched: List[Dict[str, Any]] = []
+        fallback_trends_only: List[Dict[str, Any]] = []
 
         for c in sellable:
-
             title = c["title"]
 
             c["category"] = c.get("category") or infer_category(title)
-
             c["tags"] = c.get("tags") or [w for w in slugify(title).split("-")[:4] if w]
-
             c.setdefault("signals", {})
 
             # Pinterest
-
             pin = fetch_pinterest_signal(title)
-
             c["signals"]["pinterest"] = pin
-
-            pin_hits = pin.get("hits", 0)
+            pin_hits = int(pin.get("hits", 0) or 0)
 
             if pin_hits > 0:
-
                 if "pinterest" not in c["sources"]:
                     c["sources"].append("pinterest")
 
@@ -156,118 +153,116 @@ def main():
                     c["source_url"] = pin.get("source_url")
 
             # TikTok
-
             tk = fetch_tiktok_signal(title)
-
             c["signals"]["tiktok"] = tk
-
-            tk_hits = tk.get("hits", 0)
-
-            tk_views = tk.get("views_estimate", 0)
+            tk_hits = int(tk.get("hits", 0) or 0)
+            tk_views = int(tk.get("views_estimate", 0) or 0)
 
             if tk_hits > 0 or tk_views > 0:
-
                 if "tiktok" not in c["sources"]:
                     c["sources"].append("tiktok")
 
-            # ❗ rejet si aucun signal social
+            has_social = (pin_hits > 0) or (tk_hits > 0) or (tk_views > 0)
 
-            if pin_hits == 0 and tk_hits == 0 and tk_views == 0:
-                continue
+            if has_social:
+                enriched.append(c)
+            else:
+                # on ne jette pas : on garde en fallback “Trends-only”
+                fallback_trends_only.append(c)
 
-            enriched.append(c)
+        stats["candidates_enriched_social"] = len(enriched)
+        stats["candidates_fallback_trends_only"] = len(fallback_trends_only)
 
-        stats["candidates_enriched"] = len(enriched)
-
-        # 5️⃣ Scoring
-
-        max_interest = compute_max_interest(enriched)
-
-        stats["max_interest"] = max_interest
-
+        # 5) Scoring
+        # On score d'abord les "social validated"
+        max_interest_social = compute_max_interest(enriched) if enriched else 100
         for c in enriched:
-
-            s = score_candidate(c, max_interest=max_interest)
-
+            s = score_candidate(c, max_interest=max_interest_social)
             c["score"] = s["score"]
-
             c["score_breakdown"] = s["score_breakdown"]
 
         enriched.sort(key=lambda x: x["score"], reverse=True)
 
-        # 6️⃣ Diversité catégorie
+        # Si on n'a pas assez de social validated, on complète avec Trends-only scorés
+        used_fallback = False
+        if len(enriched) < MIN_SOCIAL_WINNERS and fallback_trends_only:
+            used_fallback = True
 
+            max_interest_fb = compute_max_interest(fallback_trends_only)
+            for c in fallback_trends_only:
+                s = score_candidate(c, max_interest=max_interest_fb)
+                c["score"] = s["score"]
+                c["score_breakdown"] = s["score_breakdown"]
+
+            fallback_trends_only.sort(key=lambda x: x["score"], reverse=True)
+
+            needed = min(MAX_TRENDS_ONLY_FALLBACK, TOP_N - len(enriched))
+            enriched.extend(fallback_trends_only[:needed])
+
+        stats["fallback_trends_used"] = used_fallback
+        stats["final_scored_pool"] = len(enriched)
+
+        # 6) Diversité catégorie
         diversified = apply_category_diversity(enriched, max_per_category=MAX_PER_CATEGORY)
 
-        # 7️⃣ Top produits
-
+        # 7) Top produits
         winners = diversified[:TOP_N]
-
         stats["topN"] = len(winners)
 
-        rows = []
+        # 8) Analyse IA + rows Supabase
+        rows: List[Dict[str, Any]] = []
 
         for w in winners:
-
             title = w["title"]
-
             slug = slugify(title)[:80]
 
-            analysis = generate_analysis({
-
-                "title": title,
-                "category": w.get("category","autre"),
-                "tags": w.get("tags", []),
-                "sources": w.get("sources", []),
-                "signals": w.get("signals", {}),
-
-            }, geo=GEO)
+            analysis = generate_analysis(
+                {
+                    "title": title,
+                    "category": w.get("category", "autre"),
+                    "tags": w.get("tags", []),
+                    "sources": w.get("sources", []),
+                    "signals": w.get("signals", {}),
+                },
+                geo=GEO,
+            )
 
             summary = ""
-
             try:
-
                 summary = (analysis.get("positioning", {}) or {}).get("main_promise", "") or ""
-
             except Exception:
-
                 summary = ""
 
-            rows.append({
-
-                "run_date": run_date,
-                "title": title,
-                "slug": slug,
-                "category": w.get("category","autre"),
-                "tags": w.get("tags", []),
-                "sources": w.get("sources", []),
-                "score": int(w.get("score", 0)),
-                "score_breakdown": w.get("score_breakdown", {}),
-                "summary": summary,
-                "signals": w.get("signals", {}),
-                "analysis": analysis,
-                "image_url": w.get("image_url"),
-                "image_source": w.get("image_source"),
-                "source_url": w.get("source_url"),
-                "is_hidden": False,
-                "published_at": utc_now_iso(),
-
-            })
+            rows.append(
+                {
+                    "run_date": run_date,
+                    "title": title,
+                    "slug": slug,
+                    "category": w.get("category", "autre"),
+                    "tags": w.get("tags", []),  # text[]
+                    "sources": w.get("sources", []),  # text[]
+                    "score": int(w.get("score", 0)),
+                    "score_breakdown": w.get("score_breakdown", {}),
+                    "summary": summary,
+                    "signals": w.get("signals", {}),
+                    "analysis": analysis,
+                    "image_url": w.get("image_url"),
+                    "image_source": w.get("image_source"),
+                    "source_url": w.get("source_url"),
+                    "is_hidden": False,
+                    "published_at": utc_now_iso(),
+                }
+            )
 
         upsert_products(sb, rows)
-
         set_current_run_date(sb, run_date)
-
         insert_run_log(sb, run_date, "success", stats, errors)
 
         print("OK ✅", stats)
 
     except Exception as e:
-
         errors["fatal"] = str(e)
-
         insert_run_log(sb, run_date, "fail", stats, errors)
-
         raise
 
 
