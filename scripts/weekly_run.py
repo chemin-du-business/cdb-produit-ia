@@ -26,9 +26,9 @@ TOP_N = int(os.environ.get("TOP_N", "20"))
 MAX_PER_CATEGORY = int(os.environ.get("MAX_PER_CATEGORY", "3"))
 GEO = os.environ.get("RUN_GEO", "FR")
 
-# si on a moins que ça en "social validated", on complète avec Trends-only
-MIN_SOCIAL_WINNERS = int(os.environ.get("MIN_SOCIAL_WINNERS", "8"))
-MAX_TRENDS_ONLY_FALLBACK = int(os.environ.get("MAX_TRENDS_ONLY_FALLBACK", "8"))
+# V1 stable: si social=0 on veut quand même TOP_N produits
+MIN_SOCIAL_WINNERS = int(os.environ.get("MIN_SOCIAL_WINNERS", "0"))
+MAX_TRENDS_ONLY_FALLBACK = int(os.environ.get("MAX_TRENDS_ONLY_FALLBACK", str(TOP_N)))
 
 
 BAD_TERMS = [
@@ -39,6 +39,21 @@ BAD_TERMS = [
     "3 lettres",
     "4 lettres",
     "5 lettres",
+    "best ",
+    "top ",
+    "review",
+    "reviews",
+    "comparison",
+    "compare",
+    "vs",
+    "guide",
+    "how to",
+    "comment",
+    "avis",
+    "test",
+    "meilleur",
+    "meilleurs",
+    "comparatif",
 ]
 
 GENERIC_TERMS = [
@@ -51,7 +66,9 @@ GENERIC_TERMS = [
 
 
 def is_bad_title(title: str) -> bool:
-    t = title.lower()
+    t = (title or "").lower().strip()
+    if not t:
+        return True
 
     if any(x in t for x in BAD_TERMS):
         return True
@@ -70,7 +87,7 @@ def is_bad_title(title: str) -> bool:
 def infer_category(title: str) -> str:
     t = title.lower()
 
-    if any(k in t for k in ["visage", "peau", "skincare", "brosse", "serum", "crème", "beaut"]):
+    if any(k in t for k in ["visage", "peau", "skincare", "brosse", "serum", "crème", "creme", "beaut"]):
         return "beauté"
 
     if any(k in t for k in ["lampe", "led", "veilleuse", "projecteur", "déco", "deco", "maison"]):
@@ -79,17 +96,23 @@ def infer_category(title: str) -> str:
     if any(k in t for k in ["sport", "fitness", "muscu", "running", "gourde", "shaker"]):
         return "fitness"
 
-    if any(k in t for k in ["cuisine", "air fryer", "poêle", "poele", "mixeur", "couteau"]):
+    if any(k in t for k in ["cuisine", "air fryer", "poêle", "poele", "mixeur", "couteau", "blender"]):
         return "cuisine"
 
     if any(k in t for k in ["bébé", "bebe", "enfant", "maman"]):
         return "bébé"
 
-    if any(k in t for k in ["chien", "chat", "animaux", "litière", "litiere", "laisse"]):
+    if any(k in t for k in ["chien", "chat", "animaux", "litière", "litiere", "laisse", "pet"]):
         return "animaux"
 
-    if any(k in t for k in ["voiture", "auto", "moto"]):
+    if any(k in t for k in ["voiture", "auto", "moto", "car"]):
         return "auto"
+
+    if any(k in t for k in ["bureau", "desk", "ordinateur", "pc", "clavier", "souris", "support pc"]):
+        return "bureau"
+
+    if any(k in t for k in ["jardin", "garden", "désherb", "desherb", "plant", "arros"]):
+        return "jardin"
 
     return "autre"
 
@@ -102,15 +125,15 @@ def main() -> None:
     errors: Dict[str, Any] = {}
 
     try:
-        # 1) Collect trends
-        raw = fetch_google_trends_candidates(geo=GEO, limit_trending=25)
+        # 1) Collect
+        raw = fetch_google_trends_candidates(geo=GEO, limit_trending=40)
         stats["candidates_raw"] = len(raw)
 
         # 2) Merge
         merged = merge_candidates(raw)
         stats["candidates_merged"] = len(merged)
 
-        # 3) Filter produits vendables (avec IA)
+        # 3) Filter produits vendables (IA)
         sellable: List[Dict[str, Any]] = []
         for c in merged:
             title = c.get("title", "")
@@ -127,8 +150,8 @@ def main() -> None:
 
         stats["candidates_sellable"] = len(sellable)
 
-        # 4) Enrich social signals
-        enriched: List[Dict[str, Any]] = []
+        # 4) Enrich social signals (bonus, pas bloquant)
+        enriched_social: List[Dict[str, Any]] = []
         fallback_trends_only: List[Dict[str, Any]] = []
 
         for c in sellable:
@@ -163,29 +186,30 @@ def main() -> None:
                     c["sources"].append("tiktok")
 
             has_social = (pin_hits > 0) or (tk_hits > 0) or (tk_views > 0)
-
             if has_social:
-                enriched.append(c)
+                enriched_social.append(c)
             else:
-                # on ne jette pas : on garde en fallback “Trends-only”
                 fallback_trends_only.append(c)
 
-        stats["candidates_enriched_social"] = len(enriched)
+        stats["candidates_enriched_social"] = len(enriched_social)
         stats["candidates_fallback_trends_only"] = len(fallback_trends_only)
 
-        # 5) Scoring
-        # On score d'abord les "social validated"
-        max_interest_social = compute_max_interest(enriched) if enriched else 100
-        for c in enriched:
-            s = score_candidate(c, max_interest=max_interest_social)
+        # 5) Scoring social d'abord
+        for c in enriched_social:
+            s = score_candidate(c, max_interest=compute_max_interest(enriched_social) if enriched_social else 100)
             c["score"] = s["score"]
             c["score_breakdown"] = s["score_breakdown"]
 
-        enriched.sort(key=lambda x: x["score"], reverse=True)
+        enriched_social.sort(key=lambda x: x["score"], reverse=True)
 
-        # Si on n'a pas assez de social validated, on complète avec Trends-only scorés
+        # Puis compléter avec trends-only jusqu'à TOP_N
         used_fallback = False
-        if len(enriched) < MIN_SOCIAL_WINNERS and fallback_trends_only:
+        pool: List[Dict[str, Any]] = list(enriched_social)
+
+        if len(pool) < MIN_SOCIAL_WINNERS and fallback_trends_only:
+            used_fallback = True
+
+        if len(pool) < TOP_N and fallback_trends_only:
             used_fallback = True
 
             max_interest_fb = compute_max_interest(fallback_trends_only)
@@ -196,14 +220,18 @@ def main() -> None:
 
             fallback_trends_only.sort(key=lambda x: x["score"], reverse=True)
 
-            needed = min(MAX_TRENDS_ONLY_FALLBACK, TOP_N - len(enriched))
-            enriched.extend(fallback_trends_only[:needed])
+            needed = min(MAX_TRENDS_ONLY_FALLBACK, TOP_N - len(pool))
+            pool.extend(fallback_trends_only[:needed])
 
         stats["fallback_trends_used"] = used_fallback
-        stats["final_scored_pool"] = len(enriched)
+        stats["final_scored_pool"] = len(pool)
 
         # 6) Diversité catégorie
-        diversified = apply_category_diversity(enriched, max_per_category=MAX_PER_CATEGORY)
+        diversified = apply_category_diversity(pool, max_per_category=MAX_PER_CATEGORY)
+
+        # fallback si diversité trop restrictive
+        if len(diversified) < TOP_N:
+            diversified = pool
 
         # 7) Top produits
         winners = diversified[:TOP_N]
@@ -239,8 +267,8 @@ def main() -> None:
                     "title": title,
                     "slug": slug,
                     "category": w.get("category", "autre"),
-                    "tags": w.get("tags", []),  # text[]
-                    "sources": w.get("sources", []),  # text[]
+                    "tags": w.get("tags", []),
+                    "sources": w.get("sources", []),
                     "score": int(w.get("score", 0)),
                     "score_breakdown": w.get("score_breakdown", {}),
                     "summary": summary,
