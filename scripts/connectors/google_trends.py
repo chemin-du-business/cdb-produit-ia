@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from typing import Any, Dict, List
 from pytrends.request import TrendReq
+import requests
+from urllib.parse import quote_plus
 
-# On vise du volume pour que les filtres puissent travailler
+
 MIN_CANDIDATES = 200
 
 BROAD_SEEDS = [
@@ -66,24 +69,46 @@ SEO_TERMS = [
 ]
 
 
+UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
+
+
 def _is_bad_term(term: str) -> bool:
     t = (term or "").strip().lower()
     if not t:
         return True
-
     if any(x in t for x in BAD_TERMS):
         return True
-
     if any(x in t for x in SEO_TERMS):
         return True
-
     if any(x in t for x in GENERIC_TERMS) and len(t.split()) <= 3:
         return True
-
     if len(t.split()) <= 2:
         return True
-
     return False
+
+
+def _autocomplete(seed: str, hl: str = "fr") -> List[str]:
+    """
+    Fallback ultra-stable (marche sur GitHub Actions) via Google Suggest.
+    """
+    q = (seed or "").strip()
+    if not q:
+        return []
+
+    url = f"https://suggestqueries.google.com/complete/search?client=firefox&hl={hl}&q={quote_plus(q)}"
+    try:
+        r = requests.get(url, headers={"User-Agent": UA}, timeout=15)
+        data = r.json()
+        # format: [query, [suggestions...], ...]
+        suggs = data[1] if isinstance(data, list) and len(data) > 1 else []
+        out = []
+        for s in suggs:
+            s = str(s).strip()
+            if s and not _is_bad_term(s):
+                out.append(s)
+        return out
+    except Exception:
+        return []
 
 
 def _interest_max(pytrends: TrendReq, term: str, geo: str, timeframe: str) -> int:
@@ -97,147 +122,111 @@ def _interest_max(pytrends: TrendReq, term: str, geo: str, timeframe: str) -> in
     return 0
 
 
-def _related_queries(
-    pytrends: TrendReq,
-    seed: str,
-    geo: str,
-    timeframe: str,
-    cap_top: int,
-    cap_rising: int,
-) -> List[Dict[str, Any]]:
-    """
-    IMPORTANT: related_queries() dépend du dernier build_payload.
-    Donc on fait build_payload([seed]) ici, juste avant.
-    """
+def _related_queries(pytrends: TrendReq, seed: str, geo: str, timeframe: str, cap: int) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
-
     try:
         pytrends.build_payload([seed], geo=geo, timeframe=timeframe)
         related = pytrends.related_queries()
         data = (related.get(seed, {}) or {}) if isinstance(related, dict) else {}
 
-        top = data.get("top")
-        rising = data.get("rising")
-
-        def add_df(df, kind: str, cap: int):
+        for kind in ("top", "rising"):
+            df = data.get(kind)
             if df is None:
-                return
+                continue
             for _, row in df.head(cap).iterrows():
                 q = str(row.get("query", "")).strip()
-                if not q:
-                    continue
-                if _is_bad_term(q):
-                    continue
-                out.append({"query": q, "kind": kind})
-
-        add_df(top, "top", cap_top)
-        add_df(rising, "rising", cap_rising)
-
+                if q and not _is_bad_term(q):
+                    out.append({"query": q, "kind": kind})
     except Exception:
         pass
 
-    # dédup interne
+    # dedup
     seen = set()
-    dedup: List[Dict[str, Any]] = []
+    dedup = []
     for x in out:
-        key = x["query"].lower()
-        if key in seen:
+        k = x["query"].lower()
+        if k in seen:
             continue
-        seen.add(key)
+        seen.add(k)
         dedup.append(x)
-
     return dedup
 
 
 def fetch_google_trends_candidates(geo: str = "FR", limit_trending: int = 40) -> List[Dict[str, Any]]:
-    """
-    V1 stable:
-      - trending_searches FR
-      - related queries top+rising avec build_payload garanti
-      - fallback seeds e-commerce
-      - timeframe adaptatif
-    """
     pytrends = TrendReq(hl="fr-FR", tz=60)
+    timeframe = "today 3-m"
 
-    # 1m puis 3m si trop pauvre
-    timeframes = ["today 1-m", "today 3-m"]
+    candidates: List[Dict[str, Any]] = []
 
-    for timeframe in timeframes:
-        candidates: List[Dict[str, Any]] = []
+    # 1) Essai pytrends trending_searches (peut être vide sur GitHub)
+    trends: List[str] = []
+    try:
+        df = pytrends.trending_searches(pn="france")
+        trends = [str(x).strip() for x in df[0].tolist() if str(x).strip()][:limit_trending]
+    except Exception:
+        trends = []
 
-        # 1) Trending searches FR
-        trends: List[str] = []
-        try:
-            df = pytrends.trending_searches(pn="france")
-            trends = [str(x).strip() for x in df[0].tolist() if str(x).strip()][:limit_trending]
-        except Exception:
-            trends = []
-
-        # 1.a) Pour chaque trend : related queries
-        for trend in trends:
-            if not trend:
-                continue
-
-            interest = _interest_max(pytrends, trend, geo, timeframe)
-            rel = _related_queries(pytrends, trend, geo, timeframe, cap_top=25, cap_rising=25)
-
-            for item in rel:
-                q = item["query"]
-                candidates.append(
-                    {
-                        "title": q,
-                        "sources": ["google_trends"],
-                        "signals": {
-                            "google_trends": {
-                                "seed": trend,
-                                "kind": item["kind"],
-                                "interest": interest,
-                                "timeframe": timeframe,
-                            }
-                        },
+    for trend in trends:
+        interest = _interest_max(pytrends, trend, geo, timeframe)
+        rel = _related_queries(pytrends, trend, geo, timeframe, cap=25)
+        for item in rel:
+            candidates.append({
+                "title": item["query"],
+                "sources": ["google_trends"],
+                "signals": {
+                    "google_trends": {
+                        "seed": trend,
+                        "kind": item["kind"],
+                        "interest": interest,
+                        "timeframe": timeframe,
                     }
-                )
+                }
+            })
 
-        # 2) Fallback seeds si pas assez
-        if len(candidates) < MIN_CANDIDATES:
-            for seed in BROAD_SEEDS:
-                interest = _interest_max(pytrends, seed, geo, timeframe)
-                rel = _related_queries(pytrends, seed, geo, timeframe, cap_top=25, cap_rising=25)
-
-                for item in rel:
-                    q = item["query"]
-                    candidates.append(
-                        {
-                            "title": q,
-                            "sources": ["google_trends"],
-                            "signals": {
-                                "google_trends": {
-                                    "seed": seed,
-                                    "kind": f"fallback_{item['kind']}",
-                                    "interest": interest,
-                                    "timeframe": timeframe,
-                                }
-                            },
+    # 2) Seeds via pytrends related_queries
+    if len(candidates) < MIN_CANDIDATES:
+        for seed in BROAD_SEEDS:
+            interest = _interest_max(pytrends, seed, geo, timeframe)
+            rel = _related_queries(pytrends, seed, geo, timeframe, cap=25)
+            for item in rel:
+                candidates.append({
+                    "title": item["query"],
+                    "sources": ["google_trends"],
+                    "signals": {
+                        "google_trends": {
+                            "seed": seed,
+                            "kind": f"fallback_{item['kind']}",
+                            "interest": interest,
+                            "timeframe": timeframe,
                         }
-                    )
+                    }
+                })
 
-        # Dédup global
-        seen = set()
-        deduped: List[Dict[str, Any]] = []
-        for c in candidates:
-            k = (c.get("title") or "").strip().lower()
-            if not k or k in seen:
-                continue
-            seen.add(k)
-            deduped.append(c)
+    # 3) Fallback ultime ultra stable : Google Autocomplete
+    if len(candidates) < MIN_CANDIDATES:
+        for seed in BROAD_SEEDS:
+            for s in _autocomplete(seed, hl="fr"):
+                candidates.append({
+                    "title": s,
+                    "sources": ["google_trends"],
+                    "signals": {
+                        "google_trends": {
+                            "seed": seed,
+                            "kind": "autocomplete",
+                            "interest": 0,
+                            "timeframe": timeframe,
+                        }
+                    }
+                })
 
-        if len(deduped) >= MIN_CANDIDATES:
-            return deduped
+    # dedup global
+    seen = set()
+    out: List[Dict[str, Any]] = []
+    for c in candidates:
+        k = (c.get("title") or "").strip().lower()
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        out.append(c)
 
-        # sinon on boucle au timeframe suivant (today 3-m)
-
-        # si on a quand même un peu de matière, on retourne quand même
-        if len(deduped) > 0 and timeframe == timeframes[-1]:
-            return deduped
-
-    return []
+    return out
