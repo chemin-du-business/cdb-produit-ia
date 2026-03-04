@@ -47,6 +47,53 @@ def _clean_str(x: Any) -> str:
     return s
 
 
+def _coerce_int(x: Any, default: int) -> int:
+    try:
+        if x is None:
+            return default
+        if isinstance(x, bool):
+            return default
+        if isinstance(x, (int, float)):
+            return int(x)
+        s = str(x).strip().replace(",", ".")
+        return int(float(s))
+    except Exception:
+        return default
+
+
+def _coerce_float(x: Any, default: float) -> float:
+    try:
+        if x is None:
+            return default
+        if isinstance(x, bool):
+            return default
+        if isinstance(x, (int, float)):
+            return float(x)
+        s = str(x).strip().replace("€", "").replace(",", ".")
+        return float(s)
+    except Exception:
+        return default
+
+
+def _clamp(n: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, n))
+
+
+def _uniq_keep_order(items: List[str]) -> List[str]:
+    seen = set()
+    out = []
+    for it in items:
+        t = _clean_str(it)
+        if not t:
+            continue
+        k = t.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(t)
+    return out
+
+
 def extract_product_name(caption: str, geo: str = "FR") -> str:
     caption = (caption or "").strip()
     if not caption:
@@ -99,6 +146,7 @@ def is_sellable_product(term: str, geo: str = "FR") -> bool:
 
 def _default_analysis(title: str) -> Dict[str, Any]:
     # fallback "rempli" (pas vide) si IA KO
+    # (garde le format existant pour ne pas casser la page)
     return {
         "risks": [{"note": "Concurrence possible sur ce type de produit.", "type": "concurrence", "level": "medium"}],
         "angles": {
@@ -136,14 +184,52 @@ def _default_analysis(title: str) -> Dict[str, Any]:
 
 
 def _build_user_payload(payload: Dict[str, Any], geo: str) -> Dict[str, Any]:
+    """
+    IMPORTANT: on enrichit l'entrée (sans rien casser si pas fourni),
+    et on remplace output_required (template "string") par output_format (anti-générique).
+    """
     title = (payload.get("title") or "").strip()
     category = (payload.get("category") or "autre").strip()
     tags = payload.get("tags") or []
     signals = payload.get("signals") or {}
     tk = _ensure_dict(signals.get("tiktok_hashtag"))
 
+    # champs optionnels (si l'appelant les fournit, l'IA devient nettement moins générique)
+    attributes = _ensure_dict(payload.get("attributes"))
+    use_case = _clean_str(payload.get("use_case"))
+    differentiators = _ensure_list(payload.get("differentiators"))
+    competitors = _ensure_list(payload.get("competitors"))
+    commercial = _ensure_dict(payload.get("commercial"))
+    shipping = _ensure_dict(payload.get("shipping"))
+    compliance = _ensure_dict(payload.get("compliance"))
+
     return {
-        "product": {"title": title, "category": category, "tags": tags, "market": geo},
+        "product": {
+            "title": title,
+            "category": category,
+            "tags": tags,
+            "market": geo,
+            "use_case": use_case,
+            "attributes": attributes,
+            "differentiators": differentiators,
+        },
+        "market_context": {
+            "known_competitors": competitors,
+            "primary_platforms": _ensure_list(payload.get("primary_platforms")) or ["TikTok", "Shopify"],
+        },
+        "commercial": {
+            "target_price": commercial.get("target_price"),
+            "cogs_estimate": commercial.get("cogs_estimate"),
+            "shipping_estimate": commercial.get("shipping_estimate"),
+            "shipping": shipping,
+            "target_margin": commercial.get("target_margin"),
+            "vat_included": commercial.get("vat_included", True),
+        },
+        "compliance": {
+            "touches_skin": bool(compliance.get("touches_skin", payload.get("touches_skin", False))),
+            "for_children": bool(compliance.get("for_children", payload.get("for_children", False))),
+            "medical_claims": bool(compliance.get("medical_claims", payload.get("medical_claims", False))),
+        },
         "tiktok_signal": {
             "views": int(tk.get("views", 0) or 0),
             "likes": int(tk.get("likes", 0) or 0),
@@ -152,132 +238,208 @@ def _build_user_payload(payload: Dict[str, Any], geo: str) -> Dict[str, Any]:
             "created_at": tk.get("created_at"),
             "video_url": tk.get("video_url"),
         },
-        "output_required": {
-            "risks": [{"note": "string", "type": "string", "level": "low|medium|high"}],
+        "output_format": {
+            "risks": "array<{note:string,type:string,level:'low'|'medium'|'high'}> (3-6 risques spécifiques)",
             "angles": {
-                "hooks": ["string", "string", "string"],
-                "objections": [{"objection": "string", "response": "string"}],
-                "ugc_script": {"script": "string", "duration_seconds": 20},
+                "hooks": "array<string> (4-7 hooks TikTok FR, spécifiques au produit, sans phrases génériques)",
+                "objections": "array<{objection:string,response:string}> (3-6, concrètes et liées au produit)",
+                "ugc_script": "object<{script:string,duration_seconds:int}> (15-30s, parlé, avec démo spécifique)",
             },
-            "confidence": {"score": 1, "reasons": ["string"]},
-            "positioning": {
-                "why_now": "string",
-                "main_promise": "string",
-                "problem_solved": "string",
-                "target_customer": "string",
-            },
+            "confidence": "object<{score:int(1..10),reasons:array<string>(3-6)}> (raisons spécifiques)",
+            "positioning": "object<{why_now,main_promise,problem_solved,target_customer}> (sans blabla générique)",
             "recommendations": {
-                "upsells": ["string"],
-                "channels": ["string"],
-                "price_range": {"min": 0, "max": 0, "currency": "EUR"},
+                "upsells": "array<string> (2-6, cohérents avec le produit)",
+                "channels": "array<string> (2-6, cohérents marché FR)",
+                "price_range": "object<{min:number,max:number,currency:'EUR'}> (min/max réalistes et justifiés implicitement)",
             },
         },
         "constraints": [
             "Retourne UNIQUEMENT le JSON final, sans texte, sans markdown.",
-            "Pas de '...', pas de champs vides.",
-            "Hooks: 4 à 7 hooks courts, style TikTok FR.",
-            "Objections: 3 à 6 objections/réponses concrètes.",
-            "UGC script: 15 à 30 secondes, très 'parlé', avec démo.",
-            "Confidence.score: 1..10.",
-            "Price_range: min/max réalistes FR pour e-commerce (ex: 19-79).",
+            "Aucun champ vide. Aucun '...'. Aucun placeholder du type [problème].",
+            "Interdit d'utiliser des formulations vagues type 'produit pratique', 'résultat visible rapidement', 'concurrence possible' sans préciser POURQUOI pour CE produit.",
+            "Chaque risque doit être différent ET lié à un détail du produit (matière/usage/catégorie/logistique/conformité/retours/SAV/saturation).",
+            "Hooks: 4 à 7 hooks courts (<= 12 mots si possible), style TikTok FR, incluant un bénéfice/usage/démo spécifique.",
+            "Objections: 3 à 6 objections/réponses concrètes, adaptées au produit (prix, efficacité, sécurité, taille, entretien, SAV, compatibilité...).",
+            "UGC script: 15 à 30 secondes, très parlé, avec une démo avant/après OU un test concret lié au produit.",
+            "Confidence.score: 1..10. Reasons: 3..6, spécifiques aux signaux et au produit.",
+            "Price_range: min/max en EUR réalistes pour e-commerce FR selon catégorie/complexité/attributs/coûts si fournis. Pas de valeur par défaut.",
         ],
     }
 
 
+def _needs_repair(data: Dict[str, Any]) -> bool:
+    """
+    Détecte les sorties trop incomplètes/génériques -> on déclenche un 2e call "repair".
+    Simple et safe (n'affecte pas si la sortie est bonne).
+    """
+    if not isinstance(data, dict) or not data:
+        return True
+
+    angles = _ensure_dict(data.get("angles"))
+    hooks = _ensure_list(angles.get("hooks"))
+    objections = _ensure_list(angles.get("objections"))
+    ugc = _ensure_dict(angles.get("ugc_script"))
+
+    risks = _ensure_list(data.get("risks"))
+    positioning = _ensure_dict(data.get("positioning"))
+    recommendations = _ensure_dict(data.get("recommendations"))
+    price = _ensure_dict(recommendations.get("price_range"))
+    confidence = _ensure_dict(data.get("confidence"))
+
+    # minimums
+    if len(hooks) < 4:
+        return True
+    if len(objections) < 3:
+        return True
+    if len(risks) < 3:
+        return True
+
+    if not _clean_str(ugc.get("script")):
+        return True
+
+    # positioning complet
+    for k in ("why_now", "main_promise", "problem_solved", "target_customer"):
+        if not _clean_str(positioning.get(k)):
+            return True
+
+    # confidence
+    score = confidence.get("score")
+    if score is None:
+        return True
+    if len(_ensure_list(confidence.get("reasons"))) < 3:
+        return True
+
+    # price_range présent
+    if price.get("min") is None or price.get("max") is None:
+        return True
+
+    return False
+
+
+def _repair_analysis(original: Dict[str, Any], user_payload: Dict[str, Any], title: str) -> Dict[str, Any]:
+    """
+    2e passe: on demande au modèle de corriger/compléter UNIQUEMENT ce qui est faible ou générique,
+    en restant dans le même format JSON (pour ne pas casser la page).
+    """
+    system = (
+        "Tu es un expert e-commerce FR et copywriter TikTok. "
+        "Tu vas RECEVOIR un JSON 'draft' et tu dois l'AMÉLIORER : "
+        "le rendre spécifique au produit, non générique, sans placeholders, et complet. "
+        "IMPORTANT: conserve EXACTEMENT la structure et les clés attendues (risks/angles/confidence/positioning/recommendations). "
+        "Retourne UNIQUEMENT le JSON final, sans markdown."
+    )
+
+    repair_instructions = {
+        "product_context": user_payload.get("product", {}),
+        "tiktok_signal": user_payload.get("tiktok_signal", {}),
+        "commercial": user_payload.get("commercial", {}),
+        "market_context": user_payload.get("market_context", {}),
+        "compliance": user_payload.get("compliance", {}),
+        "draft_to_improve": original,
+        "repair_rules": [
+            "Remplace tout élément générique par des versions spécifiques au produit (bénéfice, usage, démo, contrainte).",
+            "Risks: 3-6 risques différents, chacun avec une cause concrète et une conséquence business.",
+            "Hooks: 4-7 hooks courts, pas de 'Tout le monde parle de...' sans angle concret.",
+            "Objections: 3-6, orientées produit et marché FR.",
+            "UGC script: 15-30s, parlé, avec une démo concrète liée au produit (test, avant/après, 'preuve').",
+            "Price_range: propose min/max réalistes en EUR (peuvent être décimaux), adaptés à la catégorie + complexité + coûts si fournis.",
+            "Confidence: score 1..10 + 3-6 raisons spécifiques (pas 'problème universel').",
+            "Interdit: placeholders [x], '...', et phrases vides.",
+        ],
+        "title_hint": title,
+    }
+
+    resp = client.chat.completions.create(
+        model=_model(),
+        temperature=0.7,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": json.dumps(repair_instructions, ensure_ascii=False)},
+        ],
+    )
+    txt = (resp.choices[0].message.content or "").strip()
+    return _safe_json_load(txt)
+
+
 def _normalize_analysis(data: Dict[str, Any], title: str) -> Dict[str, Any]:
-    # force structure + remplit si vide
+    """
+    IMPORTANT: on ne réinjecte plus de templates "génériques" sauf si l'IA est KO.
+    Ici on valide + nettoie + borne, mais on évite d'écraser avec des valeurs par défaut.
+    """
+    # force structure
     risks = _ensure_list(data.get("risks"))
     angles = _ensure_dict(data.get("angles"))
     confidence = _ensure_dict(data.get("confidence"))
     positioning = _ensure_dict(data.get("positioning"))
     recommendations = _ensure_dict(data.get("recommendations"))
 
-    # risks
+    # risks (on garde ce que l'IA donne, on nettoie)
     out_risks = []
     for r in risks:
         rr = _ensure_dict(r)
-        out_risks.append(
-            {
-                "note": _clean_str(rr.get("note")),
-                "type": _clean_str(rr.get("type")),
-                "level": _clean_str(rr.get("level")) or "medium",
-            }
-        )
-    if not out_risks or not out_risks[0]["note"]:
-        out_risks = [{"note": "Concurrence possible sur ce type de produit.", "type": "concurrence", "level": "medium"}]
+        note = _clean_str(rr.get("note"))
+        typ = _clean_str(rr.get("type"))
+        lvl = _clean_str(rr.get("level")) or "medium"
+        if note:
+            out_risks.append({"note": note, "type": typ or "autre", "level": lvl})
+    out_risks = out_risks[:6]
 
     # angles
-    hooks = [_clean_str(x) for x in _ensure_list(angles.get("hooks")) if _clean_str(x)]
+    hooks = _uniq_keep_order([_clean_str(x) for x in _ensure_list(angles.get("hooks"))])[:7]
     objections = []
     for o in _ensure_list(angles.get("objections")):
         oo = _ensure_dict(o)
-        objections.append({"objection": _clean_str(oo.get("objection")), "response": _clean_str(oo.get("response"))})
+        ob = _clean_str(oo.get("objection"))
+        rp = _clean_str(oo.get("response"))
+        if ob and rp:
+            objections.append({"objection": ob, "response": rp})
+    objections = objections[:6]
+
     ugc = _ensure_dict(angles.get("ugc_script"))
     ugc_script = {
         "script": _clean_str(ugc.get("script")),
-        "duration_seconds": int(ugc.get("duration_seconds") or 20),
+        "duration_seconds": _coerce_int(ugc.get("duration_seconds"), 20),
     }
-
-    # auto-fill si vide
-    if len(hooks) < 3:
-        hooks = [
-            f"Le produit {title} dont TikTok parle partout",
-            f"Tu vas vouloir {title} après avoir vu ça",
-            f"Avant/Après : {title} en 10 secondes",
-            f"Le hack simple que {title} rend possible",
-        ]
-    if len(objections) < 2:
-        objections = [
-            {"objection": "Ça a l’air gadget", "response": "On montre le résultat en démo (avant/après) en 5 secondes."},
-            {"objection": "Trop cher", "response": "Moins cher qu’une alternative pro + utile tous les jours."},
-            {"objection": "Je ne suis pas sûr que ça marche", "response": "UGC + preuve sociale + garantie satisfait ou remboursé."},
-        ]
-    if not ugc_script["script"]:
-        ugc_script["script"] = (
-            f"J’avais un vrai problème avec [problème]… puis j’ai testé {title}. "
-            "Regarde la démo : (avant) … (après) … "
-            "Si tu veux le même résultat, je te mets le lien."
-        )
-        ugc_script["duration_seconds"] = 20
-    ugc_script["duration_seconds"] = max(15, min(30, int(ugc_script["duration_seconds"] or 20)))
+    ugc_script["duration_seconds"] = max(15, min(30, ugc_script["duration_seconds"]))
 
     # confidence
-    conf_score = int(confidence.get("score") or 6)
+    conf_score = _coerce_int(confidence.get("score"), 6)
     conf_score = max(1, min(10, conf_score))
-    conf_reasons = [_clean_str(x) for x in _ensure_list(confidence.get("reasons")) if _clean_str(x)]
-    if not conf_reasons:
-        conf_reasons = ["Signal TikTok observé", "Produit démontrable en vidéo", "Problème simple et universel"]
+    conf_reasons = _uniq_keep_order([_clean_str(x) for x in _ensure_list(confidence.get("reasons"))])[:6]
 
     # positioning
     pos = {
-        "why_now": _clean_str(positioning.get("why_now")) or "Format UGC + démonstration = fort potentiel de conversion.",
-        "main_promise": _clean_str(positioning.get("main_promise")) or "Résultat visible rapidement avec un usage simple.",
-        "problem_solved": _clean_str(positioning.get("problem_solved")) or "Résout un irritant du quotidien / améliore le confort.",
-        "target_customer": _clean_str(positioning.get("target_customer")) or "Grand public 18-45, acheteurs impulsifs e-commerce.",
+        "why_now": _clean_str(positioning.get("why_now")),
+        "main_promise": _clean_str(positioning.get("main_promise")),
+        "problem_solved": _clean_str(positioning.get("problem_solved")),
+        "target_customer": _clean_str(positioning.get("target_customer")),
     }
 
     # recommendations
-    price = _ensure_dict(recommendations.get("price_range"))
-    pr_min = int(price.get("min") or 19)
-    pr_max = int(price.get("max") or 49)
-    if pr_max < pr_min:
-        pr_max = pr_min + 10
-    pr_min = max(9, pr_min)
-    pr_max = min(199, pr_max)
+    upsells = _uniq_keep_order([_clean_str(x) for x in _ensure_list(recommendations.get("upsells"))])[:6]
+    channels = _uniq_keep_order([_clean_str(x) for x in _ensure_list(recommendations.get("channels"))])[:6]
 
-    upsells = [_clean_str(x) for x in _ensure_list(recommendations.get("upsells")) if _clean_str(x)]
-    channels = [_clean_str(x) for x in _ensure_list(recommendations.get("channels")) if _clean_str(x)]
-    if not channels:
-        channels = ["TikTok Ads", "UGC organique", "Retargeting"]
+    price = _ensure_dict(recommendations.get("price_range"))
+    pr_min = _coerce_float(price.get("min"), 0.0)
+    pr_max = _coerce_float(price.get("max"), 0.0)
+
+    # bornes raisonnables FR ecom (sans imposer un template)
+    # si l'IA a mis des valeurs hors-sol, on clamp; si elle n'a rien mis, on laisse 0..0
+    if pr_min > 0:
+        pr_min = _clamp(pr_min, 5.0, 499.0)
+    if pr_max > 0:
+        pr_max = _clamp(pr_max, 5.0, 499.0)
+    if pr_min > 0 and pr_max > 0 and pr_max < pr_min:
+        pr_max = pr_min + 10.0
 
     return {
-        "risks": out_risks[:6],
-        "angles": {"hooks": hooks[:7], "objections": objections[:6], "ugc_script": ugc_script},
-        "confidence": {"score": conf_score, "reasons": conf_reasons[:6]},
+        "risks": out_risks,
+        "angles": {"hooks": hooks, "objections": objections, "ugc_script": ugc_script},
+        "confidence": {"score": conf_score, "reasons": conf_reasons},
         "positioning": pos,
         "recommendations": {
-            "upsells": upsells[:6] or ["Bundle / pack", "Accessoires complémentaires"],
-            "channels": channels[:6],
+            "upsells": upsells,
+            "channels": channels,
             "price_range": {"min": pr_min, "max": pr_max, "currency": "EUR"},
         },
     }
@@ -291,26 +453,42 @@ def generate_analysis(payload: Dict[str, Any], geo: str = "FR") -> Dict[str, Any
     user_payload = _build_user_payload(payload, geo)
 
     system = (
-        "Tu es un expert e-commerce FR. "
-        "Tu dois produire un JSON COMPLET au format demandé, sans champs vides. "
+        "Tu es un expert e-commerce FR et copywriter TikTok. "
+        "Tu dois produire un JSON COMPLET au format demandé, sans champs vides, et NON GÉNÉRIQUE. "
+        "Tu dois adapter hooks/objections/risques/positioning/reco/price_range/ugc au produit (titre, catégorie, attributs, use_case, différenciateurs, signal TikTok, coûts si fournis). "
         "Retourne UNIQUEMENT le JSON final, sans markdown."
     )
 
-    # 2 tentatives (retry) pour éviter fallback
-    last_txt = ""
-    for _ in range(2):
-        resp = client.chat.completions.create(
-            model=_model(),
-            temperature=0.5,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
-            ],
-        )
-        last_txt = (resp.choices[0].message.content or "").strip()
-        data = _safe_json_load(last_txt)
-        if data:
-            return _normalize_analysis(data, title)
+    # 1) génération
+    resp = client.chat.completions.create(
+        model=_model(),
+        temperature=0.8,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+        ],
+    )
+    txt = (resp.choices[0].message.content or "").strip()
+    data = _safe_json_load(txt)
 
-    # si ça échoue, fallback rempli (pas vide)
+    # 2) repair si incomplet / trop faible
+    if _needs_repair(data):
+        repaired = _repair_analysis(data or {}, user_payload, title)
+        if repaired:
+            data = repaired
+
+    # 3) normalize (nettoyage/validation) ou fallback si KO total
+    if data:
+        normalized = _normalize_analysis(data, title)
+
+        # sécurité: si encore trop vide (IA KO), fallback
+        if (
+            not normalized.get("angles", {}).get("hooks")
+            or not normalized.get("angles", {}).get("ugc_script", {}).get("script")
+            or not normalized.get("positioning", {}).get("main_promise")
+        ):
+            return _default_analysis(title)
+
+        return normalized
+
     return _default_analysis(title)

@@ -4,6 +4,7 @@ import os
 import time
 from typing import Any, Dict, List
 from urllib.parse import quote
+
 import requests
 
 APIFY_API_BASE = "https://api.apify.com/v2"
@@ -13,27 +14,38 @@ UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121 Safari/537.36"
 )
 
+
 def _apify_token() -> str:
     tok = (os.environ.get("APIFY_TOKEN") or "").strip()
     if not tok:
         raise RuntimeError("APIFY_TOKEN manquant (GitHub Secret).")
     return tok
 
+
 def _actor_id() -> str:
-    # IMPORTANT: doit être comme dans Apify: "clockworks/tiktok-hashtag-scraper"
     return (os.environ.get("APIFY_ACTOR_ID") or "clockworks/tiktok-hashtag-scraper").strip()
+
 
 def _timeout_seconds() -> int:
     return int(os.environ.get("APIFY_TIMEOUT_SECONDS") or "240")
+
 
 def _hashtags() -> List[str]:
     raw = (os.environ.get("TIKTOK_HASHTAGS") or "").strip()
     if raw:
         return [x.strip().lstrip("#") for x in raw.split(",") if x.strip()]
-    return ["tiktokmademebuyit", "amazonfinds", "viralproducts", "tiktokshopfinds", "gadgets"]
+    return [
+        "tiktokmademebuyit",
+        "amazonfinds",
+        "viralproducts",
+        "tiktokshopfinds",
+        "gadgets",
+    ]
+
 
 def _max_posts_per_hashtag() -> int:
     return int(os.environ.get("TIKTOK_MAX_POSTS_PER_HASHTAG") or "80")
+
 
 def _limit_total() -> int:
     return int(os.environ.get("TIKTOK_VIDEOS_LIMIT") or "250")
@@ -41,9 +53,7 @@ def _limit_total() -> int:
 
 def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     token = _apify_token()
-
-    # ✅ FIX: encoder actor_id (le "/" doit devenir "%2F")
-    actor_id_enc = quote(actor_id, safe="")  # "clockworks/tiktok-hashtag-scraper" -> "clockworks%2Ftiktok-hashtag-scraper"
+    actor_id_enc = quote(actor_id, safe="")
 
     r = requests.post(
         f"{APIFY_API_BASE}/acts/{actor_id_enc}/runs?token={token}",
@@ -52,13 +62,9 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
         headers={"User-Agent": UA},
     )
 
-    # utile pour debug si ça recasse
     if r.status_code == 404:
         raise RuntimeError(
-            f"Apify 404 sur Actor. Vérifie APIFY_ACTOR_ID.\n"
-            f"Actor reçu: {actor_id}\n"
-            f"URL appelée: {APIFY_API_BASE}/acts/{actor_id_enc}/runs\n"
-            f"Réponse: {r.text[:300]}"
+            f"Apify 404 Actor.\nActor: {actor_id}\nURL: {APIFY_API_BASE}/acts/{actor_id_enc}/runs\n{r.text[:200]}"
         )
 
     r.raise_for_status()
@@ -66,7 +72,7 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
     run = (r.json() or {}).get("data") or {}
     run_id = run.get("id")
     if not run_id:
-        raise RuntimeError("Apify: run_id introuvable.")
+        raise RuntimeError("Apify run_id introuvable")
 
     deadline = time.time() + _timeout_seconds()
     status = "RUNNING"
@@ -78,11 +84,14 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
             headers={"User-Agent": UA},
         )
         rr.raise_for_status()
+
         data = (rr.json() or {}).get("data") or {}
         status = data.get("status") or status
+
         if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
             run = data
             break
+
         time.sleep(3)
 
     if status != "SUCCEEDED":
@@ -90,7 +99,7 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
 
     dataset_id = run.get("defaultDatasetId")
     if not dataset_id:
-        raise RuntimeError("Apify: defaultDatasetId introuvable.")
+        raise RuntimeError("Apify defaultDatasetId introuvable")
 
     it = requests.get(
         f"{APIFY_API_BASE}/datasets/{dataset_id}/items?token={token}&clean=true",
@@ -98,18 +107,17 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
         headers={"User-Agent": UA},
     )
     it.raise_for_status()
+
     items = it.json()
     return items if isinstance(items, list) else []
 
 
 def fetch_tiktok_hashtag_videos() -> List[Dict[str, Any]]:
     actor_id = _actor_id()
-    hashtags = _hashtags()
-    max_posts = _max_posts_per_hashtag()
 
     input_payload = {
-        "hashtags": hashtags,
-        "maxPostsPerHashtag": max_posts,
+        "hashtags": _hashtags(),
+        "maxPostsPerHashtag": _max_posts_per_hashtag(),
     }
 
     items = run_actor_and_get_items(actor_id, input_payload)
@@ -127,22 +135,30 @@ def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
             continue
 
         caption = str(v.get("text") or "").strip()
-        url = str(v.get("webVideoUrl") or "").strip()
-        if not caption or not url:
+
+        video_meta = v.get("videoMeta") or {}
+
+        # ✅ URL MP4 directe depuis Apify (celle que tu veux stocker en DB)
+        mp4_url = str(video_meta.get("downloadAddr") or "").strip()
+
+        if not caption or not mp4_url:
             continue
 
-        if url in seen:
+        # dédoublonnage sur l’URL mp4
+        if mp4_url in seen:
             continue
-        seen.add(url)
+        seen.add(mp4_url)
 
         likes = int(v.get("diggCount") or 0)
         shares = int(v.get("shareCount") or 0)
         views = int(v.get("playCount") or 0)
         comments = int(v.get("commentCount") or 0)
 
-        author = v.get("authorMeta.name")
+        author_meta = v.get("authorMeta") or {}
+        author = author_meta.get("name")
+
         created = v.get("createTimeISO")
-        duration = v.get("videoMeta.duration")
+        duration = video_meta.get("duration")
 
         out.append(
             {
@@ -150,7 +166,8 @@ def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
                 "sources": ["tiktok_hashtag"],
                 "signals": {
                     "tiktok_hashtag": {
-                        "video_url": url,
+                        "video_url": str(v.get("webVideoUrl") or "").strip(),
+                        "video_storage_url": mp4_url,  # ✅ utilisé par weekly_run_v3
                         "author": author,
                         "created_at": created,
                         "duration_seconds": duration,

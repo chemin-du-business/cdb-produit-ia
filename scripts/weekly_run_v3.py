@@ -117,6 +117,7 @@ def main() -> None:
                 "image_url": None,
                 "image_source": None,
                 "source_url": (w.get("signals", {}).get("tiktok_hashtag", {}) or {}).get("video_url"),
+                "video_storage_url": (w.get("signals", {}).get("tiktok_hashtag", {}) or {}).get("video_storage_url"),  # ✅ AJOUT
                 "is_hidden": False,
             }
         )
