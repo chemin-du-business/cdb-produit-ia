@@ -5,7 +5,6 @@ from pytrends.request import TrendReq
 # On vise du volume pour que les filtres puissent travailler
 MIN_CANDIDATES = 200
 
-# Seeds e-commerce plus orientées "produits"
 BROAD_SEEDS = [
     "tiktok gadget",
     "viral gadget",
@@ -38,7 +37,6 @@ BAD_TERMS = [
     "10 lettres",
 ]
 
-# Trop générique (souvent des catégories et du bruit)
 GENERIC_TERMS = [
     "accessoire",
     "produit",
@@ -49,7 +47,6 @@ GENERIC_TERMS = [
     "outil",
 ]
 
-# SEO / contenus (pas des produits)
 SEO_TERMS = [
     "best ",
     "top ",
@@ -77,15 +74,12 @@ def _is_bad_term(term: str) -> bool:
     if any(x in t for x in BAD_TERMS):
         return True
 
-    # évite les requêtes SEO type "best home weather stations"
     if any(x in t for x in SEO_TERMS):
         return True
 
-    # évite "accessoire X" court
     if any(x in t for x in GENERIC_TERMS) and len(t.split()) <= 3:
         return True
 
-    # trop court => souvent pas un produit
     if len(t.split()) <= 2:
         return True
 
@@ -103,11 +97,24 @@ def _interest_max(pytrends: TrendReq, term: str, geo: str, timeframe: str) -> in
     return 0
 
 
-def _related_queries(pytrends: TrendReq, seed: str, cap_top: int, cap_rising: int) -> List[Dict[str, Any]]:
+def _related_queries(
+    pytrends: TrendReq,
+    seed: str,
+    geo: str,
+    timeframe: str,
+    cap_top: int,
+    cap_rising: int,
+) -> List[Dict[str, Any]]:
+    """
+    IMPORTANT: related_queries() dépend du dernier build_payload.
+    Donc on fait build_payload([seed]) ici, juste avant.
+    """
     out: List[Dict[str, Any]] = []
+
     try:
+        pytrends.build_payload([seed], geo=geo, timeframe=timeframe)
         related = pytrends.related_queries()
-        data = related.get(seed, {}) or {}
+        data = (related.get(seed, {}) or {}) if isinstance(related, dict) else {}
 
         top = data.get("top")
         rising = data.get("rising")
@@ -138,26 +145,25 @@ def _related_queries(pytrends: TrendReq, seed: str, cap_top: int, cap_rising: in
             continue
         seen.add(key)
         dedup.append(x)
+
     return dedup
 
 
 def fetch_google_trends_candidates(geo: str = "FR", limit_trending: int = 40) -> List[Dict[str, Any]]:
     """
     V1 stable:
-      1) trending_searches (France)
-      2) related queries top + rising (cap plus grand)
-      3) fallback seeds e-commerce (cap plus grand)
-      4) timeframe adaptatif si trop peu de résultats
+      - trending_searches FR
+      - related queries top+rising avec build_payload garanti
+      - fallback seeds e-commerce
+      - timeframe adaptatif
     """
     pytrends = TrendReq(hl="fr-FR", tz=60)
 
-    # on essaye d'abord "1 mois", puis on élargit si trop pauvre
+    # 1m puis 3m si trop pauvre
     timeframes = ["today 1-m", "today 3-m"]
 
-    candidates: List[Dict[str, Any]] = []
-
     for timeframe in timeframes:
-        candidates = []
+        candidates: List[Dict[str, Any]] = []
 
         # 1) Trending searches FR
         trends: List[str] = []
@@ -167,16 +173,13 @@ def fetch_google_trends_candidates(geo: str = "FR", limit_trending: int = 40) ->
         except Exception:
             trends = []
 
+        # 1.a) Pour chaque trend : related queries
         for trend in trends:
+            if not trend:
+                continue
+
             interest = _interest_max(pytrends, trend, geo, timeframe)
-
-            # IMPORTANT: il faut build_payload avant related_queries()
-            try:
-                pytrends.build_payload([trend], geo=geo, timeframe=timeframe)
-            except Exception:
-                pass
-
-            rel = _related_queries(pytrends, trend, cap_top=25, cap_rising=25)
+            rel = _related_queries(pytrends, trend, geo, timeframe, cap_top=25, cap_rising=25)
 
             for item in rel:
                 q = item["query"]
@@ -199,13 +202,7 @@ def fetch_google_trends_candidates(geo: str = "FR", limit_trending: int = 40) ->
         if len(candidates) < MIN_CANDIDATES:
             for seed in BROAD_SEEDS:
                 interest = _interest_max(pytrends, seed, geo, timeframe)
-
-                try:
-                    pytrends.build_payload([seed], geo=geo, timeframe=timeframe)
-                except Exception:
-                    pass
-
-                rel = _related_queries(pytrends, seed, cap_top=25, cap_rising=25)
+                rel = _related_queries(pytrends, seed, geo, timeframe, cap_top=25, cap_rising=25)
 
                 for item in rel:
                     q = item["query"]
@@ -228,15 +225,19 @@ def fetch_google_trends_candidates(geo: str = "FR", limit_trending: int = 40) ->
         seen = set()
         deduped: List[Dict[str, Any]] = []
         for c in candidates:
-            k = c["title"].strip().lower()
+            k = (c.get("title") or "").strip().lower()
             if not k or k in seen:
                 continue
             seen.add(k)
             deduped.append(c)
 
-        candidates = deduped
+        if len(deduped) >= MIN_CANDIDATES:
+            return deduped
 
-        if len(candidates) >= MIN_CANDIDATES:
-            break
+        # sinon on boucle au timeframe suivant (today 3-m)
 
-    return candidates
+        # si on a quand même un peu de matière, on retourne quand même
+        if len(deduped) > 0 and timeframe == timeframes[-1]:
+            return deduped
+
+    return []
