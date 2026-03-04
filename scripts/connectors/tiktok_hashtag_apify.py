@@ -110,6 +110,7 @@ def fetch_tiktok_hashtag_videos() -> List[Dict[str, Any]]:
     input_payload = {
         "hashtags": hashtags,
         "maxPostsPerHashtag": max_posts,
+        "shouldDownloadVideos": True
     }
 
     items = run_actor_and_get_items(actor_id, input_payload)
@@ -151,6 +152,7 @@ def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
                 "signals": {
                     "tiktok_hashtag": {
                         "video_url": url,
+                        "video_download": v.get("videoUrl") or v.get("downloadUrl"),
                         "author": author,
                         "created_at": created,
                         "duration_seconds": duration,

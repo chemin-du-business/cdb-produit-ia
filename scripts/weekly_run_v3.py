@@ -8,7 +8,7 @@ from slugify import slugify
 from scripts.connectors.tiktok_hashtag_apify import fetch_tiktok_candidates_from_hashtags
 from scripts.pipeline.merge import merge_candidates
 from scripts.pipeline.scoring import score_candidate
-from scripts.pipeline.supabase_db import get_supabase, upsert_products
+from scripts.pipeline.supabase_db import get_supabase, upsert_products, upload_video
 from scripts.pipeline.ai import extract_product_name, is_sellable_product, generate_analysis
 
 TOP_N = int(os.environ.get("TOP_N", "20"))
@@ -88,6 +88,22 @@ def main() -> None:
         category = w.get("category", "autre")
         tags = w.get("tags", [])
 
+        video_download = (
+            w.get("signals", {})
+            .get("tiktok_hashtag", {})
+            .get("video_download")
+        )
+
+        video_storage_url = None
+        video_path = None
+
+        if video_download:
+            try:
+                video_path = f"{run_date}/{slugify(title)}.mp4"
+                video_storage_url = upload_video(sb, video_download, video_path)
+            except Exception as e:
+                print("video upload failed", e)
+
         analysis = generate_analysis(
             {
                 "title": title,
@@ -117,6 +133,8 @@ def main() -> None:
                 "image_url": None,
                 "image_source": None,
                 "source_url": (w.get("signals", {}).get("tiktok_hashtag", {}) or {}).get("video_url"),
+                "video_storage_url": video_storage_url,
+                "video_path": video_path,
                 "is_hidden": False,
             }
         )
