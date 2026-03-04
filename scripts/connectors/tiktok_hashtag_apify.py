@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 from typing import Any, Dict, List
+from urllib.parse import quote
 import requests
 
 APIFY_API_BASE = "https://api.apify.com/v2"
@@ -19,6 +20,7 @@ def _apify_token() -> str:
     return tok
 
 def _actor_id() -> str:
+    # IMPORTANT: doit être comme dans Apify: "clockworks/tiktok-hashtag-scraper"
     return (os.environ.get("APIFY_ACTOR_ID") or "clockworks/tiktok-hashtag-scraper").strip()
 
 def _timeout_seconds() -> int:
@@ -28,7 +30,7 @@ def _hashtags() -> List[str]:
     raw = (os.environ.get("TIKTOK_HASHTAGS") or "").strip()
     if raw:
         return [x.strip().lstrip("#") for x in raw.split(",") if x.strip()]
-    return ["tiktokmademebuyit","amazonfinds","viralproducts","tiktokshopfinds","gadgets"]
+    return ["tiktokmademebuyit", "amazonfinds", "viralproducts", "tiktokshopfinds", "gadgets"]
 
 def _max_posts_per_hashtag() -> int:
     return int(os.environ.get("TIKTOK_MAX_POSTS_PER_HASHTAG") or "80")
@@ -36,16 +38,31 @@ def _max_posts_per_hashtag() -> int:
 def _limit_total() -> int:
     return int(os.environ.get("TIKTOK_VIDEOS_LIMIT") or "250")
 
+
 def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     token = _apify_token()
 
+    # ✅ FIX: encoder actor_id (le "/" doit devenir "%2F")
+    actor_id_enc = quote(actor_id, safe="")  # "clockworks/tiktok-hashtag-scraper" -> "clockworks%2Ftiktok-hashtag-scraper"
+
     r = requests.post(
-        f"{APIFY_API_BASE}/acts/{actor_id}/runs?token={token}",
+        f"{APIFY_API_BASE}/acts/{actor_id_enc}/runs?token={token}",
         json=input_payload,
         timeout=30,
         headers={"User-Agent": UA},
     )
+
+    # utile pour debug si ça recasse
+    if r.status_code == 404:
+        raise RuntimeError(
+            f"Apify 404 sur Actor. Vérifie APIFY_ACTOR_ID.\n"
+            f"Actor reçu: {actor_id}\n"
+            f"URL appelée: {APIFY_API_BASE}/acts/{actor_id_enc}/runs\n"
+            f"Réponse: {r.text[:300]}"
+        )
+
     r.raise_for_status()
+
     run = (r.json() or {}).get("data") or {}
     run_id = run.get("id")
     if not run_id:
@@ -84,6 +101,7 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
     items = it.json()
     return items if isinstance(items, list) else []
 
+
 def fetch_tiktok_hashtag_videos() -> List[Dict[str, Any]]:
     actor_id = _actor_id()
     hashtags = _hashtags()
@@ -96,6 +114,7 @@ def fetch_tiktok_hashtag_videos() -> List[Dict[str, Any]]:
 
     items = run_actor_and_get_items(actor_id, input_payload)
     return items[:_limit_total()]
+
 
 def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
     videos = fetch_tiktok_hashtag_videos()
@@ -127,7 +146,7 @@ def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
 
         out.append(
             {
-                "title": caption,  # caption brute (extraction produit via IA ensuite)
+                "title": caption,
                 "sources": ["tiktok_hashtag"],
                 "signals": {
                     "tiktok_hashtag": {
