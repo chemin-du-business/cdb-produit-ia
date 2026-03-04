@@ -5,30 +5,20 @@ from datetime import date
 from typing import Any, Dict, List
 from slugify import slugify
 
-from scripts.connectors.google_trends import fetch_google_trends_candidates
-from scripts.connectors.pinterest import fetch_pinterest_signal
-from scripts.connectors.tiktok import fetch_tiktok_signal
+from scripts.connectors.tiktok_creative_center import fetch_tiktok_creative_center_candidates
+from scripts.connectors.pinterest_official import fetch_pinterest_signal
 
 from scripts.pipeline.merge import merge_candidates
-from scripts.pipeline.scoring import compute_max_interest, score_candidate
+from scripts.pipeline.scoring import score_candidate
 from scripts.pipeline.diversity import apply_category_diversity
 from scripts.pipeline.ai import is_sellable_product, generate_analysis
-from scripts.pipeline.supabase_db import (
-    get_supabase,
-    upsert_products,
-    set_current_run_date,
-    insert_run_log,
-)
+from scripts.pipeline.supabase_db import get_supabase, upsert_products, set_current_run_date, insert_run_log
 from scripts.pipeline.utils import utc_now_iso
 
 
 TOP_N = int(os.environ.get("TOP_N", "20"))
 MAX_PER_CATEGORY = int(os.environ.get("MAX_PER_CATEGORY", "3"))
-GEO = os.environ.get("RUN_GEO", "FR")
-
-# V1 stable: si social=0 on veut quand même TOP_N produits
-MIN_SOCIAL_WINNERS = int(os.environ.get("MIN_SOCIAL_WINNERS", "0"))
-MAX_TRENDS_ONLY_FALLBACK = int(os.environ.get("MAX_TRENDS_ONLY_FALLBACK", str(TOP_N)))
+REGION = os.environ.get("RUN_REGION", "FR")
 
 
 BAD_TERMS = [
@@ -36,84 +26,52 @@ BAD_TERMS = [
     "mots croisés",
     "synonyme",
     "solution",
+    "définition",
+    "definition",
     "3 lettres",
     "4 lettres",
     "5 lettres",
-    "best ",
-    "top ",
     "review",
     "reviews",
-    "comparison",
+    "best ",
+    "top ",
+    "comparatif",
     "compare",
     "vs",
-    "guide",
-    "how to",
-    "comment",
-    "avis",
-    "test",
-    "meilleur",
-    "meilleurs",
-    "comparatif",
 ]
 
-GENERIC_TERMS = [
-    "accessoire",
-    "produit",
-    "objet",
-    "article",
-    "outil",
-]
+GENERIC_TERMS = ["accessoire", "produit", "objet", "article", "outil"]
 
 
 def is_bad_title(title: str) -> bool:
-    t = (title or "").lower().strip()
+    t = (title or "").strip().lower()
     if not t:
         return True
-
     if any(x in t for x in BAD_TERMS):
         return True
-
-    # "accessoire de X" etc. trop générique si court
     if any(x in t for x in GENERIC_TERMS) and len(t.split()) <= 3:
         return True
-
-    # trop court => pas assez spécifique
     if len(t.split()) <= 2:
         return True
-
     return False
 
 
 def infer_category(title: str) -> str:
     t = title.lower()
-
-    if any(k in t for k in ["visage", "peau", "skincare", "brosse", "serum", "crème", "creme", "beaut"]):
+    if any(k in t for k in ["visage", "peau", "skincare", "brosse", "serum", "crème", "beaut"]):
         return "beauté"
-
     if any(k in t for k in ["lampe", "led", "veilleuse", "projecteur", "déco", "deco", "maison"]):
         return "maison"
-
-    if any(k in t for k in ["sport", "fitness", "muscu", "running", "gourde", "shaker"]):
+    if any(k in t for k in ["sport", "fitness", "muscu", "running", "shaker", "gourde"]):
         return "fitness"
-
-    if any(k in t for k in ["cuisine", "air fryer", "poêle", "poele", "mixeur", "couteau", "blender"]):
+    if any(k in t for k in ["cuisine", "air fryer", "poêle", "poele", "mixeur", "couteau"]):
         return "cuisine"
-
     if any(k in t for k in ["bébé", "bebe", "enfant", "maman"]):
         return "bébé"
-
-    if any(k in t for k in ["chien", "chat", "animaux", "litière", "litiere", "laisse", "pet"]):
+    if any(k in t for k in ["chien", "chat", "animaux", "litière", "litiere", "laisse"]):
         return "animaux"
-
-    if any(k in t for k in ["voiture", "auto", "moto", "car"]):
+    if any(k in t for k in ["voiture", "auto", "moto"]):
         return "auto"
-
-    if any(k in t for k in ["bureau", "desk", "ordinateur", "pc", "clavier", "souris", "support pc"]):
-        return "bureau"
-
-    if any(k in t for k in ["jardin", "garden", "désherb", "desherb", "plant", "arros"]):
-        return "jardin"
-
     return "autre"
 
 
@@ -121,125 +79,63 @@ def main() -> None:
     sb = get_supabase()
     run_date = str(date.today())
 
-    stats: Dict[str, Any] = {"run_date": run_date, "geo": GEO}
+    stats: Dict[str, Any] = {"run_date": run_date, "region": REGION}
     errors: Dict[str, Any] = {}
 
     try:
-        # 1) Collect
-        raw = fetch_google_trends_candidates(geo=GEO, limit_trending=40)
+        raw = fetch_tiktok_creative_center_candidates(region=REGION, limit=140)
         stats["candidates_raw"] = len(raw)
 
-        # 2) Merge
         merged = merge_candidates(raw)
         stats["candidates_merged"] = len(merged)
 
-        # 3) Filter produits vendables (IA)
         sellable: List[Dict[str, Any]] = []
         for c in merged:
-            title = c.get("title", "")
-            if not title:
-                continue
-
+            title = c.get("title") or ""
             if is_bad_title(title):
                 continue
-
-            if not is_sellable_product(title, geo=GEO):
+            if not is_sellable_product(title, geo=REGION):
                 continue
-
             sellable.append(c)
 
         stats["candidates_sellable"] = len(sellable)
 
-        # 4) Enrich social signals (bonus, pas bloquant)
-        enriched_social: List[Dict[str, Any]] = []
-        fallback_trends_only: List[Dict[str, Any]] = []
-
+        enriched: List[Dict[str, Any]] = []
         for c in sellable:
             title = c["title"]
-
             c["category"] = c.get("category") or infer_category(title)
             c["tags"] = c.get("tags") or [w for w in slugify(title).split("-")[:4] if w]
             c.setdefault("signals", {})
 
-            # Pinterest
             pin = fetch_pinterest_signal(title)
             c["signals"]["pinterest"] = pin
-            pin_hits = int(pin.get("hits", 0) or 0)
 
+            pin_hits = int(pin.get("hits", 0) or 0)
             if pin_hits > 0:
                 if "pinterest" not in c["sources"]:
                     c["sources"].append("pinterest")
-
                 if pin.get("image_url") and not c.get("image_url"):
                     c["image_url"] = pin["image_url"]
                     c["image_source"] = "pinterest"
                     c["source_url"] = pin.get("source_url")
 
-            # TikTok
-            tk = fetch_tiktok_signal(title)
-            c["signals"]["tiktok"] = tk
-            tk_hits = int(tk.get("hits", 0) or 0)
-            tk_views = int(tk.get("views_estimate", 0) or 0)
+            enriched.append(c)
 
-            if tk_hits > 0 or tk_views > 0:
-                if "tiktok" not in c["sources"]:
-                    c["sources"].append("tiktok")
+        stats["candidates_enriched"] = len(enriched)
 
-            has_social = (pin_hits > 0) or (tk_hits > 0) or (tk_views > 0)
-            if has_social:
-                enriched_social.append(c)
-            else:
-                fallback_trends_only.append(c)
-
-        stats["candidates_enriched_social"] = len(enriched_social)
-        stats["candidates_fallback_trends_only"] = len(fallback_trends_only)
-
-        # 5) Scoring social d'abord
-        for c in enriched_social:
-            s = score_candidate(c, max_interest=compute_max_interest(enriched_social) if enriched_social else 100)
+        for c in enriched:
+            s = score_candidate(c)
             c["score"] = s["score"]
             c["score_breakdown"] = s["score_breakdown"]
 
-        enriched_social.sort(key=lambda x: x["score"], reverse=True)
+        enriched.sort(key=lambda x: x["score"], reverse=True)
 
-        # Puis compléter avec trends-only jusqu'à TOP_N
-        used_fallback = False
-        pool: List[Dict[str, Any]] = list(enriched_social)
+        diversified = apply_category_diversity(enriched, max_per_category=MAX_PER_CATEGORY)
 
-        if len(pool) < MIN_SOCIAL_WINNERS and fallback_trends_only:
-            used_fallback = True
-
-        if len(pool) < TOP_N and fallback_trends_only:
-            used_fallback = True
-
-            max_interest_fb = compute_max_interest(fallback_trends_only)
-            for c in fallback_trends_only:
-                s = score_candidate(c, max_interest=max_interest_fb)
-                c["score"] = s["score"]
-                c["score_breakdown"] = s["score_breakdown"]
-
-            fallback_trends_only.sort(key=lambda x: x["score"], reverse=True)
-
-            needed = min(MAX_TRENDS_ONLY_FALLBACK, TOP_N - len(pool))
-            pool.extend(fallback_trends_only[:needed])
-
-        stats["fallback_trends_used"] = used_fallback
-        stats["final_scored_pool"] = len(pool)
-
-        # 6) Diversité catégorie
-        diversified = apply_category_diversity(pool, max_per_category=MAX_PER_CATEGORY)
-
-        # fallback si diversité trop restrictive
-        if len(diversified) < TOP_N:
-            diversified = pool
-
-        # 7) Top produits
         winners = diversified[:TOP_N]
         stats["topN"] = len(winners)
 
-        # 8) Analyse IA + rows Supabase
         rows: List[Dict[str, Any]] = []
-
         for w in winners:
             title = w["title"]
             slug = slugify(title)[:80]
@@ -252,7 +148,7 @@ def main() -> None:
                     "sources": w.get("sources", []),
                     "signals": w.get("signals", {}),
                 },
-                geo=GEO,
+                geo=REGION,
             )
 
             summary = ""

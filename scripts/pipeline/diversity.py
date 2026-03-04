@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 
+
 def apply_category_diversity(sorted_items: List[Dict[str, Any]], max_per_category: int = 3) -> List[Dict[str, Any]]:
     counts = {}
     out = []

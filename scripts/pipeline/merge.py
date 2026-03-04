@@ -1,41 +1,17 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 
-def merge_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    merged: Dict[str, Dict[str, Any]] = {}
 
-    for c in cands:
-        title = (c.get("title") or "").strip()
-        if not title:
+def merge_candidates(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    out: List[Dict[str, Any]] = []
+    for it in items:
+        t = (it.get("title") or "").strip()
+        if not t:
             continue
-        key = title.lower()
-
-        if key not in merged:
-            merged[key] = {
-                "title": title,
-                "sources": [],
-                "signals": {},
-                "tags": c.get("tags") or [],
-                "category": c.get("category") or "autre",
-                "image_url": c.get("image_url"),
-                "image_source": c.get("image_source"),
-                "source_url": c.get("source_url"),
-            }
-
-        # merge sources
-        for s in c.get("sources", []) or []:
-            if s not in merged[key]["sources"]:
-                merged[key]["sources"].append(s)
-
-        # merge signals (dict)
-        sig = c.get("signals") or {}
-        if isinstance(sig, dict):
-            merged[key]["signals"].update(sig)
-
-        # keep first image if exists
-        if c.get("image_url") and not merged[key].get("image_url"):
-            merged[key]["image_url"] = c["image_url"]
-            merged[key]["image_source"] = c.get("image_source")
-            merged[key]["source_url"] = c.get("source_url")
-
-    return list(merged.values())
+        k = t.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(it)
+    return out
