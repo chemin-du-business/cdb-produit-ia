@@ -3,12 +3,14 @@ name: weekly_run
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 7 * * 1" # Lundi 07:00 UTC
+    - cron: "0 7 * * 1"
 
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -22,7 +24,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      - name: Run weekly script
+      - name: Install Playwright
+        run: |
+          python -m playwright install --with-deps chromium
+
+      - name: Run pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -35,5 +41,6 @@ jobs:
           RUN_REGION: "FR"
           TOP_N: "20"
           MAX_PER_CATEGORY: "3"
+
         run: |
           python -m scripts.weekly_run
