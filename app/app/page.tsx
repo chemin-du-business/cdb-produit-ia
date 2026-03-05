@@ -15,7 +15,12 @@ type Product = {
   sources: string[];
   summary: string;
   image_url: string | null;
-  source_url: string | null; // contient soit mp4 Apify, soit lien TikTok
+
+  // TikTok / source originale
+  source_url: string | null;
+
+  // NOUVEAU: MP4 stockée (la source vidéo à afficher)
+  video_storage_url: string | null;
 };
 
 function Pill({ children }: { children: React.ReactNode }) {
@@ -36,11 +41,6 @@ function isTikTokUrl(url?: string | null) {
   } catch {
     return false;
   }
-}
-
-function isMp4Url(url?: string | null) {
-  if (!url) return false;
-  return url.toLowerCase().includes(".mp4");
 }
 
 function extractTikTokVideoId(url?: string | null) {
@@ -94,8 +94,8 @@ function VideoPlayer({ src, title }: { src: string; title: string }) {
           setMuted((m) => !m);
         }}
         className="absolute right-3 top-3 rounded-2xl bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
-        aria-label={muted ? "Unmute" : "Mute"}
-        title={muted ? "Unmute" : "Mute"}
+        aria-label={muted ? "Démuter" : "Muter"}
+        title={muted ? "Démuter" : "Muter"}
       >
         {muted ? "🔇" : "🔊"}
       </button>
@@ -105,12 +105,12 @@ function VideoPlayer({ src, title }: { src: string; title: string }) {
 }
 
 function MediaHero({ p }: { p: Product }) {
-  // 1) source_url mp4 direct => vrai player controllable
-  if (isMp4Url(p.source_url)) {
-    return <VideoPlayer src={p.source_url!} title={p.title} />;
+  // 1) MP4 stockée => vrai player contrôlable
+  if (p.video_storage_url) {
+    return <VideoPlayer src={p.video_storage_url} title={p.title} />;
   }
 
-  // 2) source_url TikTok => embed + bouton ouvrir
+  // 2) Sinon TikTok => embed + bouton ouvrir
   if (isTikTokUrl(p.source_url)) {
     return (
       <div className="relative h-full w-full bg-black/5">
@@ -184,7 +184,8 @@ async function fetchProductsByCreatedAtRange(startISO: string, endISO: string) {
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id,run_date,created_at,title,slug,category,score,sources,summary,image_url,source_url,is_hidden,mode"
+      // IMPORTANT: video_storage_url ajouté
+      "id,run_date,created_at,title,slug,category,score,sources,summary,image_url,source_url,video_storage_url,is_hidden,mode"
     )
     .gte("created_at", startISO)
     .lte("created_at", endISO)
@@ -250,7 +251,6 @@ export default function DashboardPage() {
       try {
         setLoadError(null);
 
-        // session
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData.session) {
           router.replace("/login");
@@ -258,13 +258,11 @@ export default function DashboardPage() {
         }
         if (mounted) setEmail(sessionData.session.user.email ?? null);
 
-        // semaine courante
         const w0 = getWeekBoundsParis(0);
         if (mounted) setCurrentWeekLabel(`${w0.startYMD} → ${w0.endYMD}`);
         const weekProducts = await fetchProductsByCreatedAtRange(w0.startISO, w0.endISO);
         if (mounted) setProducts(weekProducts.slice(0, 60));
 
-        // semaine dernière (seulement)
         const w1 = getWeekBoundsParis(1);
         if (mounted) setLastWeekLabel(`${w1.startYMD} → ${w1.endYMD}`);
         const lw = await fetchProductsByCreatedAtRange(w1.startISO, w1.endISO);
@@ -419,22 +417,26 @@ export default function DashboardPage() {
             {filtered.map((p) => (
               <div
                 key={p.id}
-                role="link"
-                tabIndex={0}
-                onClick={() => router.push(`/app/product/${p.slug}`)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    router.push(`/app/product/${p.slug}`);
-                  }
-                }}
-                className="group cursor-pointer overflow-hidden rounded-[32px] border border-black/10 bg-white/80 shadow-sm hover:bg-white focus:outline-none focus:ring-2 focus:ring-black/10"
+                className="group overflow-hidden rounded-[32px] border border-black/10 bg-white/80 shadow-sm hover:bg-white"
               >
                 <div className="relative aspect-[9/16] w-full bg-black/5">
                   <MediaHero p={p} />
+
                   <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
                     {p.score}/100
                   </div>
+
+                  {/* Bouton En savoir plus (navigue vers la fiche) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/app/product/${p.slug}`);
+                    }}
+                    className="absolute bottom-3 left-3 rounded-2xl bg-white/90 px-3 py-2 text-xs font-extrabold text-black hover:bg-white"
+                  >
+                    En savoir plus
+                  </button>
                 </div>
 
                 <div className="p-5">
@@ -475,16 +477,7 @@ export default function DashboardPage() {
               {lastWeekProducts.map((p, idx) => (
                 <div
                   key={p.id}
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => router.push(`/app/product/${p.slug}`)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      router.push(`/app/product/${p.slug}`);
-                    }
-                  }}
-                  className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2 hover:bg-white focus:outline-none focus:ring-2 focus:ring-black/10"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2 hover:bg-white"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-black/85">
@@ -494,8 +487,18 @@ export default function DashboardPage() {
                       {p.category} • {(p.sources ?? []).join(", ")}
                     </div>
                   </div>
-                  <div className="shrink-0 rounded-2xl bg-black px-3 py-1 text-xs font-extrabold text-white">
-                    {p.score}
+
+                  <div className="flex items-center gap-2">
+                    <div className="shrink-0 rounded-2xl bg-black px-3 py-1 text-xs font-extrabold text-white">
+                      {p.score}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/app/product/${p.slug}`)}
+                      className="shrink-0 rounded-2xl border border-black/10 bg-white px-3 py-1 text-xs font-extrabold text-black/80 hover:bg-white"
+                    >
+                      En savoir plus
+                    </button>
                   </div>
                 </div>
               ))}
