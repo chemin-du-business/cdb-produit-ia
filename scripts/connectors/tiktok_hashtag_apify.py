@@ -4,7 +4,6 @@ import os
 import time
 from typing import Any, Dict, List
 from urllib.parse import quote
-
 import requests
 
 APIFY_API_BASE = "https://api.apify.com/v2"
@@ -71,6 +70,7 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
 
     run = (r.json() or {}).get("data") or {}
     run_id = run.get("id")
+
     if not run_id:
         raise RuntimeError("Apify run_id introuvable")
 
@@ -83,6 +83,7 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
             timeout=30,
             headers={"User-Agent": UA},
         )
+
         rr.raise_for_status()
 
         data = (rr.json() or {}).get("data") or {}
@@ -98,6 +99,7 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
         raise RuntimeError(f"Apify run non réussi: {status}")
 
     dataset_id = run.get("defaultDatasetId")
+
     if not dataset_id:
         raise RuntimeError("Apify defaultDatasetId introuvable")
 
@@ -106,9 +108,11 @@ def run_actor_and_get_items(actor_id: str, input_payload: Dict[str, Any]) -> Lis
         timeout=60,
         headers={"User-Agent": UA},
     )
+
     it.raise_for_status()
 
     items = it.json()
+
     return items if isinstance(items, list) else []
 
 
@@ -118,35 +122,38 @@ def fetch_tiktok_hashtag_videos() -> List[Dict[str, Any]]:
     input_payload = {
         "hashtags": _hashtags(),
         "maxPostsPerHashtag": _max_posts_per_hashtag(),
+        "shouldDownloadVideos": True,  # ✅ IMPORTANT pour avoir mediaUrls
     }
 
     items = run_actor_and_get_items(actor_id, input_payload)
+
     return items[:_limit_total()]
 
 
 def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
+
     videos = fetch_tiktok_hashtag_videos()
 
     out: List[Dict[str, Any]] = []
     seen = set()
 
     for v in videos:
+
         if not isinstance(v, dict):
             continue
 
         caption = str(v.get("text") or "").strip()
 
-        video_meta = v.get("videoMeta") or {}
-
-        # ✅ URL MP4 directe depuis Apify (celle que tu veux stocker en DB)
-        mp4_url = str(video_meta.get("downloadAddr") or "").strip()
+        # ✅ URL mp4 stable depuis Apify storage
+        media_urls = v.get("mediaUrls") or []
+        mp4_url = str(media_urls[0]).strip() if media_urls else ""
 
         if not caption or not mp4_url:
             continue
 
-        # dédoublonnage sur l’URL mp4
         if mp4_url in seen:
             continue
+
         seen.add(mp4_url)
 
         likes = int(v.get("diggCount") or 0)
@@ -158,15 +165,23 @@ def fetch_tiktok_candidates_from_hashtags() -> List[Dict[str, Any]]:
         author = author_meta.get("name")
 
         created = v.get("createTimeISO")
+
+        video_meta = v.get("videoMeta") or {}
         duration = video_meta.get("duration")
+
+        web_url = v.get("webVideoUrl")
 
         out.append(
             {
                 "title": caption,
                 "sources": ["tiktok_hashtag"],
+
+                # optionnel mais pratique
+                "video_storage_url": mp4_url,
+
                 "signals": {
                     "tiktok_hashtag": {
-                        "video_url": str(v.get("webVideoUrl") or "").strip(),
+                        "video_url": web_url,
                         "video_storage_url": mp4_url,  # ✅ utilisé par weekly_run_v3
                         "author": author,
                         "created_at": created,
