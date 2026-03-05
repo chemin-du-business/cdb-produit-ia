@@ -24,7 +24,7 @@ jobs:
           TOP_N: "20"
           APIFY_TIMEOUT_SECONDS: "1000"
           TIKTOK_MAX_POSTS_PER_HASHTAG: "10"
-          TIKTOK_VIDEO_LIMITE: "10"
+          TIKTOK_VIDEO_LIMIT: "10"
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           TIKTOK_HASHTAGS: ${{ secrets.TIKTOK_HASHTAGS }}
