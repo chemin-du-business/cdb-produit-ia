@@ -1,6 +1,6 @@
 name: Weekly Run V3
 
-ont:
+on:
   workflow_dispatch:
   schedule:
    - cron: "0 7 * * 1" #Tous les lundi à 7:00
