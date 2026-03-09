@@ -1,6 +1,6 @@
 name: Trending Run (V2.3)
 
-on:
+ont:
   workflow_dispatch:
   schedule:
     - cron: "0 7 * * 1" # lundi 07:00 UTC
