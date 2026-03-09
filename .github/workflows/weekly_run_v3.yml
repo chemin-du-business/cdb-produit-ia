@@ -1,6 +1,5 @@
 name: Weekly Run V3
 
-
 ont:
   workflow_dispatch:
   schedule:
