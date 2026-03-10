@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useParams, useRouter } from "next/navigation";
 
@@ -17,12 +17,17 @@ type Product = {
   image_url: string | null;
   image_source: string | null;
   source_url: string | null;
+  video_storage_url: string | null;
   analysis: any;
   score_breakdown: any;
 };
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-lg font-extrabold tracking-tight text-black/90">{children}</h2>;
+  return (
+    <h2 className="text-lg font-extrabold tracking-tight text-black/90">
+      {children}
+    </h2>
+  );
 }
 
 function Box({ children }: { children: React.ReactNode }) {
@@ -41,6 +46,174 @@ function Pill({ children }: { children: React.ReactNode }) {
   );
 }
 
+function extractTikTokVideoId(url?: string | null) {
+  if (!url) return null;
+  const m = url.match(/\/video\/(\d+)/);
+  return m?.[1] ?? null;
+}
+
+function isTikTokUrl(url?: string | null) {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return u.hostname.includes("tiktok.com");
+  } catch {
+    return false;
+  }
+}
+
+function ProductMedia({
+  title,
+  imageUrl,
+  sourceUrl,
+  videoStorageUrl,
+  score,
+}: {
+  title: string;
+  imageUrl: string | null;
+  sourceUrl: string | null;
+  videoStorageUrl: string | null;
+  score: number;
+}) {
+  const [muted, setMuted] = useState(true);
+  const [videoError, setVideoError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoStorageUrl || videoError) return;
+
+    let cancelled = false;
+
+    const playVideo = async () => {
+      try {
+        video.muted = muted;
+        video.volume = muted ? 0 : 1;
+
+        const playPromise = video.play();
+        if (playPromise && typeof playPromise.then === "function") {
+          await playPromise;
+        }
+      } catch (err: any) {
+        if (
+          cancelled ||
+          err?.name === "AbortError" ||
+          err?.message?.includes("media was removed from the document")
+        ) {
+          return;
+        }
+        console.error("video play error:", err);
+      }
+    };
+
+    playVideo();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [muted, videoStorageUrl, videoError]);
+
+  const tiktokId = extractTikTokVideoId(sourceUrl);
+
+  return (
+    <div className="overflow-hidden rounded-[28px] border border-black/10 bg-black/5">
+      <div className="relative aspect-[9/16] w-full bg-black">
+        {videoStorageUrl && !videoError ? (
+          <video
+            ref={videoRef}
+            className="h-full w-full object-cover"
+            playsInline
+            autoPlay
+            loop
+            muted={muted}
+            preload="metadata"
+            controls={false}
+            poster={imageUrl ?? undefined}
+            onError={() => {
+              console.error("video source unsupported or failed:", videoStorageUrl);
+              setVideoError(true);
+            }}
+          >
+            <source src={videoStorageUrl} type="video/mp4" />
+          </video>
+        ) : isTikTokUrl(sourceUrl) && tiktokId ? (
+          <iframe
+            src={`https://www.tiktok.com/embed/v2/${tiktokId}`}
+            className="h-full w-full"
+            allow="autoplay; encrypted-media"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            title={title}
+          />
+        ) : imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt={title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-sm text-white/70">
+            Média indisponible
+          </div>
+        )}
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/55 to-transparent" />
+
+        <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
+          {score}/100
+        </div>
+
+        {videoStorageUrl && !videoError ? (
+          <button
+            type="button"
+            onClick={async (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+
+              const video = videoRef.current;
+              if (!video) return;
+
+              const nextMuted = !video.muted;
+              try {
+                video.muted = nextMuted;
+                video.volume = nextMuted ? 0 : 1;
+                setMuted(nextMuted);
+
+                const playPromise = video.play();
+                if (playPromise && typeof playPromise.then === "function") {
+                  await playPromise;
+                }
+              } catch (err: any) {
+                if (
+                  err?.name === "AbortError" ||
+                  err?.message?.includes("media was removed from the document")
+                ) {
+                  return;
+                }
+                console.error("toggle mute error:", err);
+              }
+            }}
+            className="absolute bottom-3 right-3 rounded-2xl bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
+          >
+            {muted ? "Démute" : "Mute"}
+          </button>
+        ) : null}
+
+        {sourceUrl ? (
+          <a
+            href={sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="absolute bottom-3 left-3 rounded-2xl bg-white/90 px-3 py-2 text-xs font-extrabold text-black hover:bg-white"
+          >
+            Voir la source
+          </a>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function ProductPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
@@ -53,7 +226,6 @@ export default function ProductPage() {
     let mounted = true;
 
     const init = async () => {
-      // must be logged in
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) {
         router.replace("/login");
@@ -62,15 +234,17 @@ export default function ProductPage() {
 
       const { data, error } = await supabase
         .from("products")
-        .select("id,title,slug,category,score,tags,sources,summary,image_url,image_source,source_url,analysis,score_breakdown")
+        .select(
+          "id,title,slug,category,score,tags,sources,summary,image_url,image_source,source_url,video_storage_url,analysis,score_breakdown"
+        )
         .eq("slug", slug)
         .single();
 
       if (error) {
         console.error(error);
         if (mounted) setP(null);
-      } else {
-        if (mounted) setP(data as Product);
+      } else if (mounted) {
+        setP(data as Product);
       }
 
       if (mounted) setLoading(false);
@@ -97,7 +271,10 @@ export default function ProductPage() {
       <div className="min-h-screen bg-[#f6f7fb] p-6">
         <div className="mx-auto max-w-6xl rounded-3xl border border-black/10 bg-white/70 p-6">
           <p className="text-sm text-black/70">Produit introuvable.</p>
-          <Link className="mt-4 inline-block rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white" href="/app">
+          <Link
+            className="mt-4 inline-block rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white"
+            href="/app"
+          >
             Retour dashboard
           </Link>
         </div>
@@ -109,9 +286,11 @@ export default function ProductPage() {
   const positioning = analysis.positioning ?? {};
   const angles = analysis.angles ?? {};
   const hooks: string[] = angles.hooks ?? [];
-  const objections: Array<{ objection: string; response: string }> = angles.objections ?? [];
+  const objections: Array<{ objection: string; response: string }> =
+    angles.objections ?? [];
   const ugc = angles.ugc_script ?? null;
-  const risks: Array<{ type: string; level: string; note: string }> = analysis.risks ?? [];
+  const risks: Array<{ type: string; level: string; note: string }> =
+    analysis.risks ?? [];
   const recos = analysis.recommendations ?? {};
   const conf = analysis.confidence ?? {};
 
@@ -122,7 +301,10 @@ export default function ProductPage() {
       </div>
 
       <header className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link href="/app" className="text-sm font-semibold text-black/70 hover:text-black">
+        <Link
+          href="/app"
+          className="text-sm font-semibold text-black/70 hover:text-black"
+        >
           ← Retour dashboard
         </Link>
         <div className="flex items-center gap-2">
@@ -141,7 +323,9 @@ export default function ProductPage() {
                 <div className="text-xs font-semibold text-black/50">
                   Sources : {(p.sources ?? []).join(", ")}
                 </div>
-                <h1 className="mt-2 text-2xl font-extrabold tracking-tight">{p.title}</h1>
+                <h1 className="mt-2 text-2xl font-extrabold tracking-tight">
+                  {p.title}
+                </h1>
                 <p className="mt-3 text-sm text-black/60">{p.summary}</p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -157,21 +341,28 @@ export default function ProductPage() {
               </div>
             </div>
 
-            <div className="mt-6 overflow-hidden rounded-[28px] border border-black/10 bg-black/5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {p.image_url ? (
-                <img src={p.image_url} alt={p.title} className="h-64 w-full object-cover" />
-              ) : (
-                <div className="h-64 w-full" />
-              )}
+            <div className="mt-6">
+              <ProductMedia
+                title={p.title}
+                imageUrl={p.image_url}
+                sourceUrl={p.source_url}
+                videoStorageUrl={p.video_storage_url}
+                score={p.score}
+              />
             </div>
 
             <div className="mt-3 text-xs text-black/50">
               Image : {p.image_source ?? "n/a"}
               {p.source_url ? (
                 <>
-                  {" "}•{" "}
-                  <a className="underline hover:text-black" href={p.source_url} target="_blank" rel="noreferrer">
+                  {" "}
+                  •{" "}
+                  <a
+                    className="underline hover:text-black"
+                    href={p.source_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     source
                   </a>
                 </>
@@ -183,10 +374,26 @@ export default function ProductPage() {
             <Box>
               <SectionTitle>Positionnement</SectionTitle>
               <div className="mt-4 space-y-3 text-sm text-black/70">
-                <div><span className="font-semibold text-black/80">Promesse :</span> {positioning.main_promise ?? "—"}</div>
-                <div><span className="font-semibold text-black/80">Cible :</span> {positioning.target_customer ?? "—"}</div>
-                <div><span className="font-semibold text-black/80">Problème résolu :</span> {positioning.problem_solved ?? "—"}</div>
-                <div><span className="font-semibold text-black/80">Pourquoi maintenant :</span> {positioning.why_now ?? "—"}</div>
+                <div>
+                  <span className="font-semibold text-black/80">Promesse :</span>{" "}
+                  {positioning.main_promise ?? "—"}
+                </div>
+                <div>
+                  <span className="font-semibold text-black/80">Cible :</span>{" "}
+                  {positioning.target_customer ?? "—"}
+                </div>
+                <div>
+                  <span className="font-semibold text-black/80">
+                    Problème résolu :
+                  </span>{" "}
+                  {positioning.problem_solved ?? "—"}
+                </div>
+                <div>
+                  <span className="font-semibold text-black/80">
+                    Pourquoi maintenant :
+                  </span>{" "}
+                  {positioning.why_now ?? "—"}
+                </div>
               </div>
             </Box>
 
@@ -195,8 +402,14 @@ export default function ProductPage() {
               <div className="mt-4 grid gap-3">
                 {hooks.length ? (
                   hooks.map((h, i) => (
-                    <div key={i} className="rounded-2xl border border-black/10 bg-white p-3 text-sm text-black/70">
-                      <span className="font-semibold text-black/80">Hook {i + 1} :</span> {h}
+                    <div
+                      key={i}
+                      className="rounded-2xl border border-black/10 bg-white p-3 text-sm text-black/70"
+                    >
+                      <span className="font-semibold text-black/80">
+                        Hook {i + 1} :
+                      </span>{" "}
+                      {h}
                     </div>
                   ))
                 ) : (
@@ -210,10 +423,17 @@ export default function ProductPage() {
               <div className="mt-4 space-y-3">
                 {objections.length ? (
                   objections.map((o, i) => (
-                    <div key={i} className="rounded-2xl border border-black/10 bg-white p-4 text-sm">
-                      <div className="font-semibold text-black/80">Objection</div>
+                    <div
+                      key={i}
+                      className="rounded-2xl border border-black/10 bg-white p-4 text-sm"
+                    >
+                      <div className="font-semibold text-black/80">
+                        Objection
+                      </div>
                       <div className="mt-1 text-black/70">{o.objection}</div>
-                      <div className="mt-3 font-semibold text-black/80">Réponse</div>
+                      <div className="mt-3 font-semibold text-black/80">
+                        Réponse
+                      </div>
                       <div className="mt-1 text-black/70">{o.response}</div>
                     </div>
                   ))
@@ -228,9 +448,15 @@ export default function ProductPage() {
               <div className="mt-4 space-y-2">
                 {risks.length ? (
                   risks.map((r, i) => (
-                    <div key={i} className="flex items-start justify-between gap-3 rounded-2xl border border-black/10 bg-white p-3 text-sm">
+                    <div
+                      key={i}
+                      className="flex items-start justify-between gap-3 rounded-2xl border border-black/10 bg-white p-3 text-sm"
+                    >
                       <div className="text-black/70">
-                        <span className="font-semibold text-black/80">{r.type}</span> — {r.note}
+                        <span className="font-semibold text-black/80">
+                          {r.type}
+                        </span>{" "}
+                        — {r.note}
                       </div>
                       <span className="rounded-full bg-black px-3 py-1 text-xs font-semibold text-white">
                         {r.level}
@@ -245,9 +471,11 @@ export default function ProductPage() {
 
             <Box>
               <SectionTitle>Recommandations</SectionTitle>
-              <div className="mt-4 text-sm text-black/70 space-y-2">
+              <div className="mt-4 space-y-2 text-sm text-black/70">
                 <div>
-                  <span className="font-semibold text-black/80">Prix conseillé :</span>{" "}
+                  <span className="font-semibold text-black/80">
+                    Prix conseillé :
+                  </span>{" "}
                   {recos.price_range?.min ?? "—"} – {recos.price_range?.max ?? "—"}{" "}
                   {recos.price_range?.currency ?? ""}
                 </div>
@@ -283,7 +511,7 @@ export default function ProductPage() {
             {ugc?.script ? (
               <Box>
                 <SectionTitle>Script UGC (court)</SectionTitle>
-                <div className="mt-4 rounded-2xl border border-black/10 bg-white p-4 text-sm text-black/70 whitespace-pre-line">
+                <div className="mt-4 whitespace-pre-line rounded-2xl border border-black/10 bg-white p-4 text-sm text-black/70">
                   {ugc.script}
                 </div>
                 {ugc.duration_seconds ? (
@@ -296,24 +524,33 @@ export default function ProductPage() {
           </div>
         </div>
 
-        {/* Bottom CTAs */}
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-            <div className="text-sm font-semibold text-black/80">🎓 Formation e-commerce</div>
+            <div className="text-sm font-semibold text-black/80">
+              🎓 Formation e-commerce
+            </div>
             <div className="mt-1 text-sm text-black/60">
               Apprends la méthode complète pour lancer et scaler proprement.
             </div>
-            <a href="#" className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90">
+            <a
+              href="#"
+              className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
+            >
               Voir la formation
             </a>
           </div>
 
           <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-            <div className="text-sm font-semibold text-black/80">🎬 App vidéo (Yart)</div>
+            <div className="text-sm font-semibold text-black/80">
+              🎬 App vidéo (Yart)
+            </div>
             <div className="mt-1 text-sm text-black/60">
               Crée des vidéos ads vite pour tester tes produits.
             </div>
-            <a href="#" className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90">
+            <a
+              href="#"
+              className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
+            >
               Accéder à Yart
             </a>
           </div>
