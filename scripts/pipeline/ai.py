@@ -21,6 +21,19 @@ def _model() -> str:
     return (os.environ.get("OPENAI_MODEL") or "").strip() or "gpt-4o-mini"
 
 
+ALLOWED_CATEGORIES = [
+    "maison",
+    "beauté",
+    "cuisine",
+    "fitness",
+    "animaux",
+    "auto",
+    "accessoires",
+    "rangement",
+    "jardin",
+]
+
+
 # =============================================================================
 # RETRY
 # =============================================================================
@@ -130,6 +143,16 @@ def _slugify(text: str) -> str:
     return text[:120]
 
 
+def _contains_french_markers(text: str) -> bool:
+    t = f" {_clean_str(text).lower()} "
+    markers = [
+        " le ", " la ", " les ", " de ", " du ", " des ", " pour ", " avec ",
+        " miroir ", " brosse ", " organisateur ", " support ", " rangement ",
+        " décoratif ", " mural ", " cuisine ", " voiture ", " chien ", " chat ",
+    ]
+    return any(m in t for m in markers)
+
+
 # =============================================================================
 # QUICK REJECT
 # =============================================================================
@@ -192,7 +215,6 @@ def _chat_json_best_effort(
     messages: List[Dict[str, str]],
     json_schema: Optional[Dict[str, Any]] = None,
 ) -> str:
-    # 1) strict structured outputs if possible
     if json_schema:
         try:
             resp = _chat_with_retry(
@@ -210,7 +232,6 @@ def _chat_json_best_effort(
         except Exception:
             pass
 
-    # 2) generic json object
     try:
         resp = _chat_with_retry(
             model=model,
@@ -224,7 +245,6 @@ def _chat_json_best_effort(
     except Exception:
         pass
 
-    # 3) plain text fallback
     resp = _chat_with_retry(
         model=model,
         temperature=temperature,
@@ -255,7 +275,6 @@ ANALYSIS_SCHEMA: Dict[str, Any] = {
 
 POSITIONING_JSON_SCHEMA = {
     "name": "positioning_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -271,7 +290,6 @@ POSITIONING_JSON_SCHEMA = {
 
 HOOKS_JSON_SCHEMA = {
     "name": "hooks_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -289,7 +307,6 @@ HOOKS_JSON_SCHEMA = {
 
 OBJECTIONS_JSON_SCHEMA = {
     "name": "objections_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -315,7 +332,6 @@ OBJECTIONS_JSON_SCHEMA = {
 
 UGC_JSON_SCHEMA = {
     "name": "ugc_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -329,7 +345,6 @@ UGC_JSON_SCHEMA = {
 
 RISKS_JSON_SCHEMA = {
     "name": "risks_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -356,7 +371,6 @@ RISKS_JSON_SCHEMA = {
 
 RECOMMENDATIONS_JSON_SCHEMA = {
     "name": "recommendations_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -390,7 +404,6 @@ RECOMMENDATIONS_JSON_SCHEMA = {
 
 CONFIDENCE_JSON_SCHEMA = {
     "name": "confidence_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -409,7 +422,6 @@ CONFIDENCE_JSON_SCHEMA = {
 
 SUMMARY_JSON_SCHEMA = {
     "name": "summary_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -422,12 +434,11 @@ SUMMARY_JSON_SCHEMA = {
 
 CATEGORY_JSON_SCHEMA = {
     "name": "category_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "category": {"type": "string"},
+            "category": {"type": "string", "enum": ALLOWED_CATEGORIES},
         },
         "required": ["category"],
     },
@@ -435,7 +446,6 @@ CATEGORY_JSON_SCHEMA = {
 
 TAGS_JSON_SCHEMA = {
     "name": "tags_schema",
-    "strict": True,
     "schema": {
         "type": "object",
         "additionalProperties": False,
@@ -581,13 +591,68 @@ def _build_product_context(product_payload: Dict[str, Any], geo: str = "FR") -> 
     return context
 
 
-def _context_text(context: Dict[str, Any]) -> str:
-    return json.dumps(context, ensure_ascii=False)
-
-
 # =============================================================================
 # AI HELPERS
 # =============================================================================
+
+def _ensure_french_title(title: str, geo: str = "FR") -> str:
+    title = _clean_str(title)
+    if not title:
+        return ""
+
+    if _contains_french_markers(title):
+        return title[:80]
+
+    txt = _chat_text(
+        model=_model(),
+        temperature=0,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Tu reçois un nom de produit e-commerce. "
+                    "S'il est en anglais ou mélangé, traduis-le et normalise-le en français naturel. "
+                    "Garde un nom court, clair, vendable, de 2 à 6 mots. "
+                    "Réponds uniquement avec le nom du produit, sans phrase, sans JSON, sans guillemets."
+                ),
+            },
+            {"role": "user", "content": f"Marché: {geo}\nNom produit: {title}"},
+        ],
+    )
+
+    txt = _clean_str(txt).strip('"').strip("'")
+    txt = re.sub(r"\s+", " ", txt)
+    return txt[:80].strip(" .,-") or title[:80]
+
+
+def _normalize_product_title(title: str, geo: str = "FR") -> str:
+    title = _clean_str(title)
+    if not title:
+        return ""
+
+    txt = _chat_text(
+        model=_model(),
+        temperature=0,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Normalise ce nom de produit pour une base e-commerce française. "
+                    "Le résultat doit être en français naturel, court, clair, propre et vendable. "
+                    "Évite l'ordre maladroit des mots, les répétitions et les mots inutiles. "
+                    "Réponds uniquement avec le nom final, sans phrase, sans JSON, sans guillemets. "
+                    "2 à 6 mots maximum."
+                ),
+            },
+            {"role": "user", "content": f"Marché: {geo}\nNom produit: {title}"},
+        ],
+    )
+
+    txt = _clean_str(txt).strip('"').strip("'")
+    txt = re.sub(r"\s+", " ", txt)
+    txt = txt[:80].strip(" .,-")
+    return txt or title[:80]
+
 
 def extract_product_name(caption: str, geo: str = "FR") -> str:
     caption = (caption or "").strip()
@@ -613,10 +678,19 @@ def extract_product_name(caption: str, geo: str = "FR") -> str:
     txt = txt.strip().strip('"').strip("'").strip()
     if txt.upper() == "RIEN":
         return ""
+
     txt = re.sub(r"\s+", " ", txt)
     txt = txt[:80].strip(" .,-")
+
     if quick_reject(txt):
         return ""
+
+    txt = _ensure_french_title(txt, geo=geo)
+    txt = _normalize_product_title(txt, geo=geo)
+
+    if quick_reject(txt):
+        return ""
+
     return txt
 
 
@@ -643,7 +717,6 @@ def classify_sellability(term: str, geo: str = "FR") -> Dict[str, Any]:
         temperature=0,
         json_schema={
             "name": "sellability_schema",
-            "strict": True,
             "schema": {
                 "type": "object",
                 "additionalProperties": False,
@@ -710,15 +783,16 @@ def _call_block_json(
 
 def _generate_category(context: Dict[str, Any]) -> str:
     existing = _clean_str(context.get("category"))
-    if existing:
+    if existing in ALLOWED_CATEGORIES:
         return existing
 
     payload = {
-        "task": "Classifie le produit dans UNE catégorie e-commerce simple et courte en français.",
+        "task": "Classifie le produit dans UNE catégorie parmi la liste autorisée.",
+        "allowed_categories": ALLOWED_CATEGORIES,
         "rules": [
-            "1 à 3 mots max",
-            "Pas de phrase",
-            "Exemples: maison, beauté, cuisine, fitness, animaux, auto, rangement, accessoires"
+            "Choisis uniquement une catégorie dans la liste",
+            "Ne crée pas de nouvelle catégorie",
+            "Réponds uniquement avec une catégorie autorisée"
         ],
         "product_context": context,
     }
@@ -730,7 +804,9 @@ def _generate_category(context: Dict[str, Any]) -> str:
         temperature=0,
     )
     category = _clean_str(data.get("category"))
-    return category or "produits tendances"
+    if category not in ALLOWED_CATEGORIES:
+        category = "accessoires"
+    return category
 
 
 def _generate_tags(context: Dict[str, Any]) -> List[str]:
@@ -1082,9 +1158,14 @@ def _generate_summary(context: Dict[str, Any], positioning: Dict[str, Any]) -> s
 def generate_analysis(product_payload: Dict[str, Any], geo: str = "FR") -> Dict[str, Any]:
     context = _build_product_context(product_payload, geo)
 
-    # enrich context first
+    if context.get("title"):
+        context["title"] = _normalize_product_title(_ensure_french_title(context["title"], geo=geo), geo=geo)
+
     if not _clean_str(context.get("category")):
         context["category"] = _generate_category(context)
+    elif context["category"] not in ALLOWED_CATEGORIES:
+        context["category"] = "accessoires"
+
     if len(_ensure_list(context.get("tags"))) < 2:
         context["tags"] = _generate_tags(context)
 
@@ -1120,8 +1201,15 @@ def generate_analysis(product_payload: Dict[str, Any], geo: str = "FR") -> Dict[
 
 def generate_summary(product_payload: Dict[str, Any], geo: str = "FR") -> str:
     context = _build_product_context(product_payload, geo)
+
+    if context.get("title"):
+        context["title"] = _normalize_product_title(_ensure_french_title(context["title"], geo=geo), geo=geo)
+
     if not _clean_str(context.get("category")):
         context["category"] = _generate_category(context)
+    elif context["category"] not in ALLOWED_CATEGORIES:
+        context["category"] = "accessoires"
+
     if len(_ensure_list(context.get("tags"))) < 2:
         context["tags"] = _generate_tags(context)
 
@@ -1132,8 +1220,13 @@ def generate_summary(product_payload: Dict[str, Any], geo: str = "FR") -> str:
 def enrich_product_payload(product_payload: Dict[str, Any], geo: str = "FR") -> Dict[str, Any]:
     context = _build_product_context(product_payload, geo)
 
+    if context.get("title"):
+        context["title"] = _normalize_product_title(_ensure_french_title(context["title"], geo=geo), geo=geo)
+
     if not _clean_str(context.get("category")):
         context["category"] = _generate_category(context)
+    elif context["category"] not in ALLOWED_CATEGORIES:
+        context["category"] = "accessoires"
 
     if len(_ensure_list(context.get("tags"))) < 2:
         context["tags"] = _generate_tags(context)
