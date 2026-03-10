@@ -4,6 +4,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
+type RiskItem = {
+  note?: string;
+  type?: string;
+  level?: "high" | "medium" | "low" | string;
+};
+
+type ProductAnalysis = {
+  risks?: RiskItem[];
+};
+
 type Product = {
   id: string;
   run_date?: string;
@@ -17,6 +27,7 @@ type Product = {
   image_url: string | null;
   source_url: string | null;
   video_storage_url: string | null;
+  analysis?: ProductAnalysis | null;
 };
 
 function Pill({ children }: { children: React.ReactNode }) {
@@ -24,6 +35,81 @@ function Pill({ children }: { children: React.ReactNode }) {
     <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-black/70">
       {children}
     </span>
+  );
+}
+
+function riskColor(level?: string) {
+  switch ((level ?? "").toLowerCase()) {
+    case "high":
+      return "bg-red-500";
+    case "medium":
+      return "bg-blue-500";
+    case "low":
+      return "bg-emerald-500";
+    default:
+      return "bg-black/30";
+  }
+}
+
+function riskLabel(level?: string) {
+  switch ((level ?? "").toLowerCase()) {
+    case "high":
+      return "High";
+    case "medium":
+      return "Medium";
+    case "low":
+      return "Low";
+    default:
+      return "Info";
+  }
+}
+
+function RiskPill({
+  level,
+  type,
+}: {
+  level?: string;
+  type?: string;
+}) {
+  return (
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] font-medium text-black/65">
+      <span
+        className={["h-1.5 w-1.5 shrink-0 rounded-full", riskColor(level)].join(
+          " "
+        )}
+      />
+      <span className="shrink-0">{riskLabel(level)}</span>
+      {type ? (
+        <span className="min-w-0 truncate">
+          {type.charAt(0).toUpperCase() + type.slice(1)}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function RiskBlock({ risks }: { risks?: RiskItem[] }) {
+  if (!risks || risks.length === 0) return null;
+
+  const visibleRisks = risks.slice(0, 3);
+
+  return (
+    <div className="mt-3 rounded-2xl border border-black/10 bg-black/[0.025] px-3 py-2.5">
+      <div className="flex items-start gap-2">
+        <span className="pt-1 text-[11px] font-semibold text-black/65">
+          Risques
+        </span>
+        <div className="min-w-0 flex-1 space-y-2">
+          {visibleRisks.map((r, idx) => (
+            <RiskPill
+              key={`${r.type ?? "risk"}-${idx}`}
+              level={r.level}
+              type={r.note ?? r.type}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -223,7 +309,6 @@ function VideoPlayer({
 }
 
 function MediaHero({ p }: { p: Product }) {
-  // 1) MP4 stockée => vrai player contrôlable
   if (p.video_storage_url) {
     return (
       <VideoPlayer
@@ -235,7 +320,6 @@ function MediaHero({ p }: { p: Product }) {
     );
   }
 
-  // 2) Sinon TikTok => embed + bouton ouvrir
   if (isTikTokUrl(p.source_url)) {
     return (
       <div className="relative h-full w-full bg-black/5">
@@ -253,7 +337,6 @@ function MediaHero({ p }: { p: Product }) {
     );
   }
 
-  // 3) fallback image
   if (p.image_url) {
     // eslint-disable-next-line @next/next/no-img-element
     return (
@@ -295,7 +378,7 @@ async function fetchProductsByRunDate(runDate: string) {
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id,run_date,created_at,title,slug,category,score,sources,summary,image_url,source_url,video_storage_url,is_hidden,mode"
+      "id,run_date,created_at,title,slug,category,score,sources,summary,analysis,image_url,source_url,video_storage_url,is_hidden,mode"
     )
     .eq("run_date", runDate)
     .eq("is_hidden", false)
@@ -313,15 +396,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // run date courante
   const [currentRunDate, setCurrentRunDate] = useState<string>("—");
   const [products, setProducts] = useState<Product[]>([]);
 
-  // run date précédente uniquement
   const [lastRunDate, setLastRunDate] = useState<string>("—");
   const [lastWeekProducts, setLastWeekProducts] = useState<Product[]>([]);
 
-  // filtres sur run date courante
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("all");
   const [source, setSource] = useState("all");
@@ -442,15 +522,12 @@ export default function DashboardPage() {
           className="flex cursor-pointer items-center gap-3"
           onClick={() => router.push("/")}
         >
-          <div className="h-10 w-10 rounded-2xl bg-black" />
-          <div className="leading-tight">
-            <div className="text-xs font-semibold tracking-wide text-black/60">
-              CDB
-            </div>
-            <div className="text-lg font-extrabold tracking-tight">
-              Produit IA
-            </div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/[0.03]">
+            <span className="text-sm font-semibold text-black">CDB</span>
           </div>
+          <span className="text-sm font-semibold tracking-tight text-black">
+            CDB Produit IA
+          </span>
         </div>
 
         <div className="flex items-center gap-3">
@@ -491,7 +568,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Filters */}
           <div className="mt-6 grid gap-3 md:grid-cols-4">
             <div className="md:col-span-2">
               <label className="text-xs font-semibold text-black/60">
@@ -555,7 +631,6 @@ export default function DashboardPage() {
             <Pill>{minScore}</Pill>
           </div>
 
-          {/* Grid: vertical TikTok thumbnails */}
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((p) => (
               <div
@@ -568,18 +643,6 @@ export default function DashboardPage() {
                   <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
                     {p.score}/100
                   </div>
-
-                  {/* Bouton En savoir plus (navigue vers la fiche) */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      router.push(`/app/product/${p.slug}`);
-                    }}
-                    className="absolute bottom-3 left-3 rounded-2xl bg-white/90 px-3 py-2 text-xs font-extrabold text-black hover:bg-white"
-                  >
-                    En savoir plus
-                  </button>
                 </div>
 
                 <div className="p-5">
@@ -593,6 +656,16 @@ export default function DashboardPage() {
                   <p className="mt-4 line-clamp-2 text-sm text-black/60">
                     {p.summary}
                   </p>
+
+                  <RiskBlock risks={p.analysis?.risks} />
+
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/app/product/${p.slug}`)}
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-[28px] bg-black px-4 py-4 text-sm font-extrabold text-white hover:bg-black/90"
+                  >
+                    Voir l’analyse complète
+                  </button>
 
                   <div className="mt-4 text-xs text-black/45">
                     Sources : {(p.sources ?? []).join(", ")}
@@ -608,7 +681,6 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Bottom: last run only */}
           <div className="mt-10 rounded-[28px] border border-black/10 bg-white/60 p-5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>

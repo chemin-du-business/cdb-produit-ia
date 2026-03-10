@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+type RiskItem = {
+  note?: string;
+  type?: string;
+  level?: "high" | "medium" | "low" | string;
+};
+
+type ProductAnalysis = {
+  risks?: RiskItem[];
+};
+
 type Product = {
   id: string;
   title: string;
@@ -11,6 +21,8 @@ type Product = {
   sources: string[];
   summary: string;
   image_url: string | null;
+  video_storage_url?: string | null;
+  analysis?: ProductAnalysis | null;
 };
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -25,6 +37,81 @@ function Pill({ children }: { children: React.ReactNode }) {
   );
 }
 
+function riskColor(level?: string) {
+  switch ((level ?? "").toLowerCase()) {
+    case "high":
+      return "bg-red-500";
+    case "medium":
+      return "bg-blue-500";
+    case "low":
+      return "bg-emerald-500";
+    default:
+      return "bg-black/30";
+  }
+}
+
+function riskLabel(level?: string) {
+  switch ((level ?? "").toLowerCase()) {
+    case "high":
+      return "High";
+    case "medium":
+      return "Medium";
+    case "low":
+      return "Low";
+    default:
+      return "Info";
+  }
+}
+
+function RiskPill({
+  level,
+  type,
+}: {
+  level?: string;
+  type?: string;
+}) {
+  return (
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] font-medium text-black/65">
+      <span
+        className={["h-1.5 w-1.5 shrink-0 rounded-full", riskColor(level)].join(
+          " "
+        )}
+      />
+      <span className="shrink-0">{riskLabel(level)}</span>
+      {type ? (
+        <span className="min-w-0 truncate">
+          {type.charAt(0).toUpperCase() + type.slice(1)}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function RiskBlock({ risks }: { risks?: RiskItem[] }) {
+  if (!risks || risks.length === 0) return null;
+
+  const visibleRisks = risks.slice(0, 3);
+
+  return (
+    <div className="mt-3 rounded-2xl border border-black/10 bg-black/[0.025] px-3 py-2.5">
+      <div className="flex items-start gap-2">
+        <span className="pt-1 text-[11px] font-semibold text-black/65">
+          Risques
+        </span>
+        <div className="min-w-0 flex-1 space-y-2">
+          {visibleRisks.map((r, idx) => (
+            <RiskPill
+              key={`${r.type ?? "risk"}-${idx}`}
+              level={r.level}
+              type={r.note ?? r.type}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FeatureCard({
   title,
   desc,
@@ -35,7 +122,7 @@ function FeatureCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="rounded-3xl border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
+    <div className="rounded-3xl border border-black/10 bg-white/75 p-6 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-white">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-black/5">
           {icon}
@@ -57,7 +144,7 @@ function Step({
   desc: string;
 }) {
   return (
-    <div className="rounded-3xl border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
+    <div className="rounded-3xl border border-black/10 bg-white/75 p-6 shadow-sm backdrop-blur">
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-black text-sm font-bold text-white">
           {n}
@@ -69,25 +156,101 @@ function Step({
   );
 }
 
+function DemoMedia({
+  product,
+  withControls = true,
+}: {
+  product: Product;
+  withControls?: boolean;
+}) {
+  if (product.video_storage_url) {
+    return (
+      <video
+        src={product.video_storage_url}
+        className="h-full w-full object-cover"
+        {...(withControls
+          ? { controls: true }
+          : {
+              autoPlay: true,
+              loop: true,
+              muted: true,
+            })}
+        playsInline
+        preload="metadata"
+      />
+    );
+  }
+
+  if (product.image_url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={product.image_url}
+        alt={product.title}
+        className="h-full w-full object-cover"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-black/[0.03] via-black/[0.05] to-black/[0.08]">
+      <div className="text-center">
+        <div className="text-3xl">✨</div>
+        <div className="mt-2 text-xs font-medium text-black/50">
+          Visuel bientôt disponible
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeroMediaCard({
+  product,
+  large = false,
+}: {
+  product: Product;
+  large?: boolean;
+}) {
+  return (
+    <div className="overflow-hidden rounded-[28px] border border-black/10 bg-white">
+      <div className={cn("relative bg-black/5", large ? "h-[260px]" : "h-[180px]")}>
+        <DemoMedia product={product} withControls={false} />
+        <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
+          {product.score}/100
+        </div>
+      </div>
+
+      <div className="p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-black/45">
+          {product.category}
+        </div>
+        <div className="mt-1 line-clamp-1 text-sm font-extrabold tracking-tight text-black/90">
+          {product.title}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default async function HomePage() {
   const supabase = createSupabaseServerClient();
 
-  // settings
   const { data: settingsRows } = await supabase
     .from("settings")
     .select("key,value")
-    .in("key", ["teaserN", "current_run_date"]);
+    .in("key", ["current_run_date"]);
 
   const settings = new Map<string, any>();
   (settingsRows ?? []).forEach((r) => settings.set(r.key, r.value));
 
-  const teaserN = Number(settings.get("teaserN")?.v ?? 5);
+  const teaserN = 3;
   const currentRunDate = String(settings.get("current_run_date")?.v ?? "");
 
-  // teaser products (public RLS => current run + published + not hidden)
   const { data: products } = await supabase
     .from("products")
-    .select("id,title,slug,category,score,tags,sources,summary,image_url")
+    .select(
+      "id,title,slug,category,score,tags,sources,summary,analysis,image_url,video_storage_url"
+    )
     .order("score", { ascending: false })
     .limit(teaserN);
 
@@ -96,67 +259,63 @@ export default async function HomePage() {
     : "Cette semaine";
 
   const hasProducts = (products ?? []).length > 0;
+  const heroProducts = (products ?? []).slice(0, 3);
 
   return (
     <main className="min-h-screen bg-[#f6f7fb] text-black">
-      {/* Background */}
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute -top-48 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-300/40 via-sky-300/40 to-fuchsia-300/40 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-[320px] w-[520px] rounded-full bg-gradient-to-r from-sky-200/50 to-indigo-200/20 blur-3xl" />
       </div>
 
-      {/* Navbar */}
-      <header className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl bg-black shadow-sm" />
-          <div className="leading-tight">
-            <div className="text-xs font-semibold tracking-wide text-black/60">
-              CDB
+      <header className="sticky top-0 z-50 border-b border-black/10 bg-white/70 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/[0.03]">
+              <span className="text-sm font-semibold text-black">CDB</span>
             </div>
-            <div className="text-lg font-extrabold tracking-tight">
-              Produit IA
-            </div>
-          </div>
-        </Link>
+            <span className="text-sm font-semibold tracking-tight text-black">
+              CDB Produit IA
+            </span>
+          </Link>
 
-        <nav className="flex items-center gap-3">
-          <Link
-            href="/login"
-            className="rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
-          >
-            Se connecter
-          </Link>
-          <Link
-            href="/login"
-            className="hidden rounded-2xl border border-black/10 bg-white/70 px-4 py-2 text-sm font-semibold text-black/80 hover:bg-white sm:inline-flex"
-          >
-            Démarrer gratuitement
-          </Link>
-        </nav>
+          <nav className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="rounded-2xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-semibold text-black/80 hover:bg-white"
+            >
+              Se connecter
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
+            >
+              Créer un compte gratuit
+            </Link>
+          </nav>
+        </div>
       </header>
 
-      {/* Hero */}
       <section className="relative mx-auto w-full max-w-6xl px-6 pt-6">
         <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
           <div>
             <div className="flex flex-wrap gap-2">
               <Pill>🇫🇷 France</Pill>
-              <Pill>🔁 Sélection hebdo</Pill>
-              <Pill>🤖 Analyse IA</Pill>
-              <Pill>📌 Pinterest → 🎵 TikTok</Pill>
+              <Pill>100% gratuit</Pill>
+              <Pill>🎥 Vidéos produits</Pill>
+              <Pill>🤖 IA de détection</Pill>
             </div>
 
-            <h1 className="mt-5 text-4xl font-extrabold leading-[1.05] tracking-tight md:text-5xl">
-              Trouve des{" "}
-              <span className="text-black">produits gagnants</span>{" "}
-              <br className="hidden md:block" />
-              <span className="text-black/60">en 3 étapes.</span>
+            <h1 className="mt-5 text-4xl font-extrabold leading-[1.02] tracking-tight md:text-6xl">
+              Trouve des <span className="text-black">produits gagnants </span>
+              avec l’IA,
+              <span className="text-black/60"> lance-toi gratuitement.</span>
             </h1>
 
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-black/60">
-              Chaque semaine, CDB Produit IA sélectionne des produits
-              prometteurs à partir de signaux (Google Trends, Pinterest, TikTok)
-              puis génère un angle marketing prêt à l’emploi.
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-black/60 md:text-lg">
+              CDB Produit IA utilise l’IA pour repérer des produits gagnants,
+              les scorer, puis générer une analyse marketing claire pour passer
+              plus vite au lancement.
             </p>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -164,179 +323,122 @@ export default async function HomePage() {
                 href="/login"
                 className="inline-flex items-center justify-center rounded-2xl bg-black px-5 py-3 text-sm font-semibold text-white hover:bg-black/90"
               >
-                Accéder gratuitement
+                Accéder gratuitement à l’application
               </Link>
               <a
-                href="#teaser"
-                className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white/70 px-5 py-3 text-sm font-semibold text-black/80 hover:bg-white"
+                href="#demo"
+                className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white/80 px-5 py-3 text-sm font-semibold text-black/80 hover:bg-white"
               >
-                Voir le teaser
+                Voir la démo
               </a>
             </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-black/55">
-              <span className="font-semibold text-black/70">
-                {weekLabel}
-              </span>
+              <span className="font-semibold text-black/70">{weekLabel}</span>
               <span className="text-black/20">•</span>
-              <span>Teaser public</span>
+              <span>Démo produit en direct</span>
               <span className="text-black/20">•</span>
-              <span>Analyse complète après connexion</span>
+              <span>Accès complet après connexion</span>
             </div>
           </div>
 
-          {/* Hero right card */}
-          <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-sm font-semibold text-black/70">
-                  {weekLabel}
-                </div>
-                <div className="mt-1 text-xl font-extrabold tracking-tight">
-                  Top produits (aperçu)
-                </div>
-              </div>
-              <div className="rounded-2xl bg-black px-3 py-2 text-xs font-bold text-white">
-                Score /100
-              </div>
-            </div>
-
-            <div className="mt-6 space-y-3">
-              {(products ?? []).slice(0, 3).map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-3 rounded-3xl border border-black/10 bg-white p-3"
-                >
-                  <div className="h-12 w-12 overflow-hidden rounded-2xl bg-black/5">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {p.image_url ? (
-                      <img
-                        src={p.image_url}
-                        alt={p.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : null}
+          <div className="rounded-[32px] border border-black/10 bg-white/75 p-6 shadow-sm backdrop-blur">
+            {heroProducts.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {heroProducts.map((p, index) => (
+                  <div
+                    key={p.id}
+                    className={cn(index === 0 && "sm:col-span-2")}
+                  >
+                    <HeroMediaCard product={p} large={index === 0} />
                   </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-black/90">
-                      {p.title}
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-black/50">
-                      <span>{p.category}</span>
-                      <span className="text-black/20">•</span>
-                      <span>{(p.sources ?? []).join(", ")}</span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl bg-black px-3 py-2 text-sm font-extrabold text-white">
-                    {p.score}
-                  </div>
-                </div>
-              ))}
-
-              {!hasProducts && (
-                <div className="rounded-3xl border border-black/10 bg-white p-4 text-sm text-black/60">
-                  Pas encore de produits publiés. Dès que le premier run hebdo
-                  est en base, le teaser s’affichera ici.
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 rounded-3xl border border-black/10 bg-black p-5 text-white">
-              <div className="text-sm font-semibold">Débloque l’analyse complète</div>
-              <div className="mt-1 text-sm text-white/70">
-                Angles, hooks, objections, risques et recommandations.
+                ))}
               </div>
-              <Link
-                href="/login"
-                className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90"
-              >
-                Se connecter
-              </Link>
-            </div>
+            ) : (
+              <div className="flex min-h-[320px] items-center justify-center rounded-[28px] border border-black/10 bg-white text-sm text-black/50">
+                Les vidéos de démonstration apparaîtront ici.
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Feature cards under hero */}
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           <FeatureCard
-            title="Découverte multi-sources"
-            desc="Google Trends + Pinterest + TikTok. On recoupe les signaux pour éviter les faux buzz."
-            icon={<span className="text-lg">🧭</span>}
+            title="Produits gagnants"
+            desc="L’IA détecte les meilleures opportunités e-commerce."
+            icon={<span className="text-lg">🔎</span>}
           />
           <FeatureCard
-            title="Angle marketing prêt"
-            desc="Promesse, hooks, objections + réponses. Direct exploitable pour tes ads et ta page produit."
-            icon={<span className="text-lg">✨</span>}
+            title="Scoring intelligent"
+            desc="Chaque produit est évalué selon plusieurs signaux clés."
+            icon={<span className="text-lg">🤖</span>}
           />
           <FeatureCard
-            title="Images produit"
-            desc="Priorité Pinterest, sinon thumbnail TikTok, sinon fallback. Pour une interface crédible."
-            icon={<span className="text-lg">🖼️</span>}
+            title="Analyse prête à vendre"
+            desc="Angles marketing, potentiel et base claire pour lancer."
+            icon={<span className="text-lg">🚀</span>}
           />
         </div>
       </section>
 
-      {/* Social proof strip */}
       <section className="relative mx-auto w-full max-w-6xl px-6 pt-10">
-        <div className="rounded-3xl border border-black/10 bg-white/60 px-6 py-4 text-sm text-black/60 backdrop-blur">
+        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 px-6 py-5 text-sm text-emerald-900">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <span className="font-semibold text-black/80">
-                Approuvé par des e-commerçants
-              </span>{" "}
-              • sélection hebdo • accès gratuit
+              <span className="font-semibold">Application gratuite.</span>{" "}
+              Accès complet après connexion.
             </div>
-            <div className="flex gap-2">
-              <Pill>Shopify</Pill>
-              <Pill>TikTok Ads</Pill>
-              <Pill>Pinterest</Pill>
-              <Pill>Google Trends</Pill>
-            </div>
+            <Link
+              href="/login"
+              className="inline-flex items-center justify-center rounded-2xl bg-black px-4 py-2 font-semibold text-white hover:bg-black/90"
+            >
+              Démarrer gratuitement
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* How it works */}
       <section className="relative mx-auto w-full max-w-6xl px-6 pt-12">
         <div className="flex flex-col gap-2">
           <h2 className="text-2xl font-extrabold tracking-tight">
             Comment ça marche
           </h2>
           <p className="text-sm text-black/60">
-            Le pipeline tourne 1 fois par semaine (GitHub Actions) et alimente la base.
+            Une app IA simple pour détecter, scorer et lancer plus vite.
           </p>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <Step
             n="1"
-            title="Collecte des signaux"
-            desc="On récupère tendances & inspirations (FR) depuis nos 3 sources."
+            title="Détecte"
+            desc="L’IA analyse des signaux provenant de contenus, vidéos et tendances pour identifier des produits avec un potentiel e-commerce réel."
           />
           <Step
             n="2"
-            title="Scoring /100"
-            desc="On déduplique, on score, on garde un Top N limité et diversifié."
+            title="Score"
+            desc="Chaque produit est évalué selon plusieurs critères : potentiel créatif vidéo, attractivité visuelle, signaux sociaux et capacité à performer en publicité."
           />
           <Step
             n="3"
-            title="Analyse IA"
-            desc="On génère un angle prêt à l’emploi + risques + recommandations."
+            title="Lance"
+            desc="Tu identifies rapidement un produit prêt à tester : angle marketing, compréhension du potentiel et base claire pour créer ta boutique et tes ads."
           />
         </div>
       </section>
 
-      {/* Teaser grid */}
-      <section id="teaser" className="relative mx-auto w-full max-w-6xl px-6 pb-20 pt-12">
+      <section
+        id="demo"
+        className="relative mx-auto w-full max-w-6xl px-6 pb-20 pt-12"
+      >
         <div className="flex items-end justify-between gap-4">
           <div>
             <h3 className="text-2xl font-extrabold tracking-tight">
-              Teaser gratuit
+              Démo gratuite
             </h3>
             <p className="mt-1 text-sm text-black/60">
-              {teaserN} produits visibles sans compte — connecte-toi pour voir le Top complet.
+              Un aperçu rapide avant d’accéder gratuitement à l’application
+              complète.
             </p>
           </div>
 
@@ -344,27 +446,18 @@ export default async function HomePage() {
             href="/login"
             className="hidden rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90 sm:inline-flex"
           >
-            Débloquer l’accès complet
+            Se connecter gratuitement
           </Link>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(products ?? []).map((p) => (
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {(products ?? []).slice(0, 3).map((p) => (
             <div
               key={p.id}
-              className="group overflow-hidden rounded-[32px] border border-black/10 bg-white/70 shadow-sm backdrop-blur hover:bg-white"
+              className="group overflow-hidden rounded-[32px] border border-black/10 bg-white/75 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-white"
             >
-              <div className="relative h-44 bg-black/5">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {p.image_url ? (
-                  <img
-                    src={p.image_url}
-                    alt={p.title}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full" />
-                )}
+              <div className="relative h-56 bg-black/5">
+                <DemoMedia product={p} />
 
                 <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
                   {p.score}/100
@@ -372,34 +465,32 @@ export default async function HomePage() {
               </div>
 
               <div className="p-5">
-                <div className="text-xs font-semibold text-black/50">
+                <div className="text-xs font-semibold uppercase tracking-wide text-black/45">
                   {p.category}
                 </div>
                 <div className="mt-1 line-clamp-2 text-lg font-extrabold tracking-tight text-black/90">
                   {p.title}
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(p.tags ?? []).slice(0, 3).map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs font-medium text-black/70"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-
-                <p className="mt-4 line-clamp-2 text-sm text-black/60">
+                <p className="mt-4 line-clamp-3 text-sm text-black/60">
                   {p.summary || "Analyse complète disponible après connexion."}
                 </p>
 
-                <div className="mt-5">
+                <RiskBlock risks={p.analysis?.risks} />
+
+                <div className="mt-5 flex flex-col gap-3">
                   <Link
                     href="/login"
                     className="inline-flex w-full items-center justify-center rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
                   >
                     Voir l’analyse complète
+                  </Link>
+
+                  <Link
+                    href="/login"
+                    className="inline-flex w-full items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-black/80 hover:bg-black/[0.02]"
+                  >
+                    Utiliser l’application gratuitement
                   </Link>
                 </div>
 
@@ -411,42 +502,71 @@ export default async function HomePage() {
           ))}
         </div>
 
-        {/* Bottom CTAs (Formation + Yart) */}
-        <div className="mt-12 grid gap-4 md:grid-cols-2">
-          <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-            <div className="text-sm font-semibold text-black/80">🎓 Formation e-commerce</div>
-            <div className="mt-1 text-sm text-black/60">
-              Méthode complète : produit → offer → créas → lancement → scaling.
-            </div>
-            <a
-              href="#"
-              className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
-            >
-              Découvrir la formation
-            </a>
+        {!hasProducts && (
+          <div className="mt-6 rounded-3xl border border-black/10 bg-white p-4 text-sm text-black/60">
+            Pas encore de produits publiés. Dès que le premier run hebdo est en
+            base, la démo s’affichera ici.
           </div>
+        )}
 
-          <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-            <div className="text-sm font-semibold text-black/80">🎬 App vidéo (Yart)</div>
-            <div className="mt-1 text-sm text-black/60">
-              Génère vite des vidéos UGC/Ads pour tester tes produits.
+        <div className="mt-12 rounded-[32px] border border-black/10 bg-black p-8 text-white">
+          <div className="grid gap-6 md:grid-cols-[1.5fr_1fr] md:items-center">
+            <div>
+              <div className="text-sm font-semibold text-white/70">
+                Passe de la démo à l’application complète
+              </div>
+              <h4 className="mt-2 text-3xl font-extrabold tracking-tight">
+                Inscris-toi et commence gratuitement.
+              </h4>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/70">
+                Plus de produits, plus d’analyses IA, plus de matière pour
+                lancer.
+              </p>
             </div>
-            <a
-              href="#"
-              className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
-            >
-              Accéder à Yart
-            </a>
+            <div className="flex flex-col gap-3">
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-white/90"
+              >
+                Créer mon compte gratuit
+              </Link>
+              <a
+                href="#footer-links"
+                className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
+              >
+                Voir les informations légales
+              </a>
+            </div>
           </div>
         </div>
 
-        <footer className="mt-14 border-t border-black/10 pt-6 text-sm text-black/50">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>© {new Date().getFullYear()} CDB Produit IA</div>
-            <div className="flex gap-4">
-              <Link className="hover:text-black" href="/login">Connexion</Link>
-              <a className="hover:text-black" href="#">Formation</a>
-              <a className="hover:text-black" href="#">Yart</a>
+        <footer
+          id="footer-links"
+          className="mt-14 border-t border-black/10 pt-6 text-sm text-black/55"
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="font-semibold text-black/80">
+                © {new Date().getFullYear()} CDB Produit IA
+              </div>
+              <div className="mt-1 text-xs text-black/45">
+                Produits gagnants, scoring IA et analyse marketing.
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <Link className="hover:text-black" href="/login">
+                Connexion
+              </Link>
+              <Link className="hover:text-black" href="/confidentialite">
+                Confidentialité
+              </Link>
+              <Link className="hover:text-black" href="/mentions-legales">
+                Mentions légales
+              </Link>
+              <Link className="hover:text-black" href="/contact">
+                Contact
+              </Link>
             </div>
           </div>
         </footer>
