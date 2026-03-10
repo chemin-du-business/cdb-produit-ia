@@ -1,561 +1,625 @@
-"use client";
+from __future__ import annotations
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
-import { useParams, useRouter } from "next/navigation";
+import os
+import json
+import time
+import random
+import re
+from typing import Any, Dict, List, Optional
 
-type Product = {
-  id: string;
-  title: string;
-  slug: string;
-  category: string;
-  score: number;
-  tags: string[];
-  sources: string[];
-  summary: string;
-  image_url: string | null;
-  image_source: string | null;
-  source_url: string | null;
-  video_storage_url: string | null;
-  analysis: any;
-  score_breakdown: any;
-};
+from openai import OpenAI, InternalServerError, RateLimitError, APITimeoutError
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-lg font-extrabold tracking-tight text-black/90">
-      {children}
-    </h2>
-  );
-}
+# =============================================================================
+# CONFIG
+# =============================================================================
 
-function Box({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-[28px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-      {children}
-    </div>
-  );
-}
+client = OpenAI(api_key=(os.environ.get("OPENAI_API_KEY") or "").strip())
 
-function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-black/70">
-      {children}
-    </span>
-  );
-}
 
-function extractTikTokVideoId(url?: string | null) {
-  if (!url) return null;
-  const m = url.match(/\/video\/(\d+)/);
-  return m?.[1] ?? null;
-}
+def _model() -> str:
+    return (os.environ.get("OPENAI_MODEL") or "").strip() or "gpt-4o-mini"
 
-function isTikTokUrl(url?: string | null) {
-  if (!url) return false;
-  try {
-    const u = new URL(url);
-    return u.hostname.includes("tiktok.com");
-  } catch {
-    return false;
-  }
-}
 
-function ProductMedia({
-  title,
-  imageUrl,
-  sourceUrl,
-  videoStorageUrl,
-  score,
-}: {
-  title: string;
-  imageUrl: string | null;
-  sourceUrl: string | null;
-  videoStorageUrl: string | null;
-  score: number;
-}) {
-  const [muted, setMuted] = useState(true);
-  const [videoError, setVideoError] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+# =============================================================================
+# RETRY
+# =============================================================================
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !videoStorageUrl || videoError) return;
+def _sleep_backoff(attempt: int) -> None:
+    base = min(2 ** attempt, 20)
+    time.sleep(base + random.random())
 
-    let cancelled = false;
 
-    const playVideo = async () => {
-      try {
-        video.muted = muted;
-        video.volume = muted ? 0 : 1;
+def _chat_with_retry(**kwargs):
+    last_error: Optional[Exception] = None
+    for attempt in range(6):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except (InternalServerError, RateLimitError, APITimeoutError) as e:
+            last_error = e
+            _sleep_backoff(attempt)
+    raise last_error  # type: ignore[misc]
 
-        const playPromise = video.play();
-        if (playPromise && typeof playPromise.then === "function") {
-          await playPromise;
-        }
-      } catch (err: any) {
-        if (
-          cancelled ||
-          err?.name === "AbortError" ||
-          err?.message?.includes("media was removed from the document")
-        ) {
-          return;
-        }
-        console.error("video play error:", err);
-      }
-    };
 
-    playVideo();
+# =============================================================================
+# JSON HELPERS
+# =============================================================================
 
-    return () => {
-      cancelled = true;
-    };
-  }, [muted, videoStorageUrl, videoError]);
+def _safe_json_load(s: str) -> Dict[str, Any]:
+    s = (s or "").strip()
+    if not s:
+        return {}
 
-  const tiktokId = extractTikTokVideoId(sourceUrl);
+    try:
+        return json.loads(s)
+    except Exception:
+        pass
 
-  return (
-    <div className="overflow-hidden rounded-[28px] border border-black/10 bg-black/5">
-      <div className="relative aspect-[9/16] w-full bg-black">
-        {videoStorageUrl && !videoError ? (
-          <video
-            ref={videoRef}
-            className="h-full w-full object-cover"
-            playsInline
-            autoPlay
-            loop
-            muted={muted}
-            preload="metadata"
-            controls={false}
-            poster={imageUrl ?? undefined}
-            onError={() => {
-              console.error("video source unsupported or failed:", videoStorageUrl);
-              setVideoError(true);
-            }}
-          >
-            <source src={videoStorageUrl} type="video/mp4" />
-          </video>
-        ) : isTikTokUrl(sourceUrl) && tiktokId ? (
-          <iframe
-            src={`https://www.tiktok.com/embed/v2/${tiktokId}`}
-            className="h-full w-full"
-            allow="autoplay; encrypted-media"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-            title={title}
-          />
-        ) : imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={title}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm text-white/70">
-            Média indisponible
-          </div>
-        )}
+    try:
+        start = s.find("{")
+        end = s.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return json.loads(s[start:end + 1])
+    except Exception:
+        pass
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/55 to-transparent" />
+    return {}
 
-        <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
-          {score}/100
-        </div>
 
-        {videoStorageUrl && !videoError ? (
-          <button
-            type="button"
-            onClick={async (e) => {
-              e.stopPropagation();
-              e.preventDefault();
+def _clean_str(x: Any) -> str:
+    s = (str(x) if x is not None else "").strip()
+    if s in ("...", "…"):
+        return ""
+    return s
 
-              const video = videoRef.current;
-              if (!video) return;
 
-              const nextMuted = !video.muted;
-              try {
-                video.muted = nextMuted;
-                video.volume = nextMuted ? 0 : 1;
-                setMuted(nextMuted);
+def _ensure_list(x: Any) -> List[Any]:
+    return x if isinstance(x, list) else []
 
-                const playPromise = video.play();
-                if (playPromise && typeof playPromise.then === "function") {
-                  await playPromise;
-                }
-              } catch (err: any) {
-                if (
-                  err?.name === "AbortError" ||
-                  err?.message?.includes("media was removed from the document")
-                ) {
-                  return;
-                }
-                console.error("toggle mute error:", err);
-              }
-            }}
-            className="absolute bottom-3 right-3 rounded-2xl bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
-          >
-            {muted ? "Démute" : "Mute"}
-          </button>
-        ) : null}
 
-        {sourceUrl ? (
-          <a
-            href={sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="absolute bottom-3 left-3 rounded-2xl bg-white/90 px-3 py-2 text-xs font-extrabold text-black hover:bg-white"
-          >
-            Voir la source
-          </a>
-        ) : null}
-      </div>
-    </div>
-  );
-}
+def _ensure_dict(x: Any) -> Dict[str, Any]:
+    return x if isinstance(x, dict) else {}
 
-export default function ProductPage() {
-  const params = useParams<{ slug: string }>();
-  const slug = params.slug;
-  const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [p, setP] = useState<Product | null>(null);
+def _coerce_int(x: Any, default: int = 0) -> int:
+    try:
+        if x is None or isinstance(x, bool):
+            return default
+        if isinstance(x, (int, float)):
+            return int(x)
+        return int(float(str(x).replace(",", ".")))
+    except Exception:
+        return default
 
-  useEffect(() => {
-    let mounted = true;
 
-    const init = async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        router.replace("/login");
-        return;
-      }
+def _coerce_float(x: Any, default: float = 0.0) -> float:
+    try:
+        if x is None or isinstance(x, bool):
+            return default
+        if isinstance(x, (int, float)):
+            return float(x)
+        s = str(x).replace("€", "").replace(",", ".")
+        return float(s)
+    except Exception:
+        return default
 
-      const { data, error } = await supabase
-        .from("products")
-        .select(
-          "id,title,slug,category,score,tags,sources,summary,image_url,image_source,source_url,video_storage_url,analysis,score_breakdown"
+
+def _clamp(n: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, n))
+
+
+def _uniq_keep_order(items: List[str]) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for it in items:
+        t = _clean_str(it)
+        if not t:
+            continue
+        k = t.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(t)
+    return out
+
+
+# =============================================================================
+# QUICK REJECT
+# =============================================================================
+
+BLOCK_PATTERNS = [
+    r"\brésultat\b", r"\bscore\b", r"\bmatch\b", r"\bligue\b", r"\bbut\b",
+    r"\bélection\b", r"\bprésident\b", r"\bministre\b", r"\bguerre\b", r"\battaque\b",
+    r"\bmétéo\b", r"\btrafic\b", r"\bgrève\b",
+    r"\baccident\b", r"\bmort\b", r"\bdécès\b",
+    r"\bfilm\b", r"\bsérie\b", r"\bacteur\b", r"\bactrice\b",
+    r"\bconcert\b", r"\bfestival\b",
+]
+BRAND_BLOCKLIST = ["iphone", "samsung", "ps5", "playstation", "xbox", "netflix", "disney", "tesla", "apple", "meta"]
+
+_block_re = re.compile("|".join(BLOCK_PATTERNS), re.IGNORECASE)
+
+
+def quick_reject(term: str) -> bool:
+    t = (term or "").strip().lower()
+    if not t:
+        return True
+    if len(t) < 3:
+        return True
+    if _block_re.search(t):
+        return True
+    if any(b in t for b in BRAND_BLOCKLIST):
+        return True
+    return False
+
+
+# =============================================================================
+# RESPONSE_FORMAT SUPPORT (best effort)
+# =============================================================================
+
+def _chat_json_best_effort(
+    *,
+    model: str,
+    temperature: float,
+    messages: List[Dict[str, str]],
+) -> str:
+    try:
+        resp = _chat_with_retry(
+            model=model,
+            temperature=temperature,
+            response_format={"type": "json_object"},
+            messages=messages,
         )
-        .eq("slug", slug)
-        .single();
+        return (resp.choices[0].message.content or "").strip()
+    except TypeError:
+        pass
+    except Exception:
+        pass
 
-      if (error) {
-        console.error(error);
-        if (mounted) setP(null);
-      } else if (mounted) {
-        setP(data as Product);
-      }
+    resp = _chat_with_retry(
+        model=model,
+        temperature=temperature,
+        messages=messages,
+    )
+    return (resp.choices[0].message.content or "").strip()
 
-      if (mounted) setLoading(false);
-    };
 
-    init();
-    return () => {
-      mounted = false;
-    };
-  }, [router, slug]);
+# =============================================================================
+# AI HELPERS
+# =============================================================================
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#f6f7fb] p-6">
-        <div className="mx-auto max-w-6xl rounded-3xl border border-black/10 bg-white/70 p-6">
-          Chargement…
-        </div>
-      </div>
-    );
-  }
+def extract_product_name(caption: str, geo: str = "FR") -> str:
+    caption = (caption or "").strip()
+    if not caption:
+        return ""
 
-  if (!p) {
-    return (
-      <div className="min-h-screen bg-[#f6f7fb] p-6">
-        <div className="mx-auto max-w-6xl rounded-3xl border border-black/10 bg-white/70 p-6">
-          <p className="text-sm text-black/70">Produit introuvable.</p>
-          <Link
-            className="mt-4 inline-block rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white"
-            href="/app"
-          >
-            Retour dashboard
-          </Link>
-        </div>
-      </div>
-    );
-  }
+    txt = _chat_json_best_effort(
+        model=_model(),
+        temperature=0,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Extrait UN SEUL nom de produit e-commerce concret depuis une caption TikTok. "
+                    "Réponds uniquement par le nom (2 à 6 mots), en français si possible. "
+                    "Si aucun produit clair : RIEN."
+                ),
+            },
+            {"role": "user", "content": f"Caption: {caption}\nMarché: {geo}"},
+        ],
+    )
 
-  const analysis = p.analysis ?? {};
-  const positioning = analysis.positioning ?? {};
-  const angles = analysis.angles ?? {};
-  const hooks: string[] = angles.hooks ?? [];
-  const objections: Array<{ objection: string; response: string }> =
-    angles.objections ?? [];
-  const ugc = angles.ugc_script ?? null;
-  const risks: Array<{ type: string; level: string; note: string }> =
-    analysis.risks ?? [];
-  const recos = analysis.recommendations ?? {};
-  const conf = analysis.confidence ?? {};
+    if txt.upper().startswith("RIEN"):
+        return ""
 
-  return (
-    <main className="min-h-screen bg-[#f6f7fb] text-black">
-      <div className="pointer-events-none fixed inset-0">
-        <div className="absolute -top-48 left-1/2 h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-300/30 via-sky-300/30 to-fuchsia-300/30 blur-3xl" />
-      </div>
+    return txt[:80]
 
-      <header className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link
-          href="/app"
-          className="text-sm font-semibold text-black/70 hover:text-black"
-        >
-          ← Retour dashboard
-        </Link>
-        <div className="flex items-center gap-2">
-          <Pill>{p.category}</Pill>
-          <div className="rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
-            {p.score}/100
-          </div>
-        </div>
-      </header>
 
-      <section className="relative mx-auto w-full max-w-6xl px-6 pb-16">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Box>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs font-semibold text-black/50">
-                  Sources : {(p.sources ?? []).join(", ")}
-                </div>
-                <h1 className="mt-2 text-2xl font-extrabold tracking-tight">
-                  {p.title}
-                </h1>
-                <p className="mt-3 text-sm text-black/60">{p.summary}</p>
+def classify_sellability(term: str, geo: str = "FR") -> Dict[str, Any]:
+    term = (term or "").strip()
+    if not term:
+        return {"sellable": False, "score": 0, "reason": "empty"}
+    if quick_reject(term):
+        return {"sellable": False, "score": 0, "reason": "quick_reject"}
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {(p.tags ?? []).map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs font-medium text-black/70"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
+    prompt = {
+        "term": term,
+        "market": geo,
+        "rules": [
+            "sellable=true seulement si c'est un produit e-commerce concret vendable (objet/accessoire).",
+            "sellable=false si actu, politique, sport, people, marque, événement, service ou trop vague.",
+            "score = vendabilité 0-100 (100 = très vendable, démontrable en vidéo, achat impulsif).",
+            "Sois strict. Si doute, sellable=false.",
+        ],
+        "output_json": {"sellable": True, "score": 75, "reason": "string"},
+    }
 
-            <div className="mt-6">
-              <ProductMedia
-                title={p.title}
-                imageUrl={p.image_url}
-                sourceUrl={p.source_url}
-                videoStorageUrl={p.video_storage_url}
-                score={p.score}
-              />
-            </div>
+    txt = _chat_json_best_effort(
+        model=_model(),
+        temperature=0,
+        messages=[
+            {"role": "system", "content": "Réponds uniquement en JSON valide."},
+            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+        ],
+    )
 
-            <div className="mt-3 text-xs text-black/50">
-              Image : {p.image_source ?? "n/a"}
-              {p.source_url ? (
-                <>
-                  {" "}
-                  •{" "}
-                  <a
-                    className="underline hover:text-black"
-                    href={p.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    source
-                  </a>
-                </>
-              ) : null}
-            </div>
-          </Box>
+    data = _safe_json_load(txt)
+    sellable = bool(data.get("sellable", False))
+    score = _coerce_int(data.get("score", 0), 0)
+    score = int(_clamp(score, 0, 100))
+    reason = _clean_str(data.get("reason", "")) or "ok"
 
-          <div className="space-y-6">
-            <Box>
-              <SectionTitle>Positionnement</SectionTitle>
-              <div className="mt-4 space-y-3 text-sm text-black/70">
-                <div>
-                  <span className="font-semibold text-black/80">Promesse :</span>{" "}
-                  {positioning.main_promise ?? "—"}
-                </div>
-                <div>
-                  <span className="font-semibold text-black/80">Cible :</span>{" "}
-                  {positioning.target_customer ?? "—"}
-                </div>
-                <div>
-                  <span className="font-semibold text-black/80">
-                    Problème résolu :
-                  </span>{" "}
-                  {positioning.problem_solved ?? "—"}
-                </div>
-                <div>
-                  <span className="font-semibold text-black/80">
-                    Pourquoi maintenant :
-                  </span>{" "}
-                  {positioning.why_now ?? "—"}
-                </div>
-              </div>
-            </Box>
+    if not sellable or score <= 0:
+        return {"sellable": False, "score": 0, "reason": reason}
+    return {"sellable": True, "score": score, "reason": reason}
 
-            <Box>
-              <SectionTitle>Angles & hooks</SectionTitle>
-              <div className="mt-4 grid gap-3">
-                {hooks.length ? (
-                  hooks.map((h, i) => (
-                    <div
-                      key={i}
-                      className="rounded-2xl border border-black/10 bg-white p-3 text-sm text-black/70"
-                    >
-                      <span className="font-semibold text-black/80">
-                        Hook {i + 1} :
-                      </span>{" "}
-                      {h}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-black/60">—</div>
-                )}
-              </div>
-            </Box>
 
-            <Box>
-              <SectionTitle>Objections</SectionTitle>
-              <div className="mt-4 space-y-3">
-                {objections.length ? (
-                  objections.map((o, i) => (
-                    <div
-                      key={i}
-                      className="rounded-2xl border border-black/10 bg-white p-4 text-sm"
-                    >
-                      <div className="font-semibold text-black/80">
-                        Objection
-                      </div>
-                      <div className="mt-1 text-black/70">{o.objection}</div>
-                      <div className="mt-3 font-semibold text-black/80">
-                        Réponse
-                      </div>
-                      <div className="mt-1 text-black/70">{o.response}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-black/60">—</div>
-                )}
-              </div>
-            </Box>
+def is_sellable_product(term: str, geo: str = "FR") -> bool:
+    return bool(classify_sellability(term, geo).get("sellable", False))
 
-            <Box>
-              <SectionTitle>Risques</SectionTitle>
-              <div className="mt-4 space-y-2">
-                {risks.length ? (
-                  risks.map((r, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start justify-between gap-3 rounded-2xl border border-black/10 bg-white p-3 text-sm"
-                    >
-                      <div className="text-black/70">
-                        <span className="font-semibold text-black/80">
-                          {r.type}
-                        </span>{" "}
-                        — {r.note}
-                      </div>
-                      <span className="rounded-full bg-black px-3 py-1 text-xs font-semibold text-white">
-                        {r.level}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-black/60">—</div>
-                )}
-              </div>
-            </Box>
 
-            <Box>
-              <SectionTitle>Recommandations</SectionTitle>
-              <div className="mt-4 space-y-2 text-sm text-black/70">
-                <div>
-                  <span className="font-semibold text-black/80">
-                    Prix conseillé :
-                  </span>{" "}
-                  {recos.price_range?.min ?? "—"} – {recos.price_range?.max ?? "—"}{" "}
-                  {recos.price_range?.currency ?? ""}
-                </div>
-                <div>
-                  <span className="font-semibold text-black/80">Canaux :</span>{" "}
-                  {(recos.channels ?? []).join(", ") || "—"}
-                </div>
-                <div>
-                  <span className="font-semibold text-black/80">Upsells :</span>{" "}
-                  {(recos.upsells ?? []).join(", ") || "—"}
-                </div>
-              </div>
-            </Box>
+# =============================================================================
+# ANALYSIS SCHEMA
+# =============================================================================
 
-            <Box>
-              <SectionTitle>Confiance</SectionTitle>
-              <div className="mt-4 text-sm text-black/70">
-                <div>
-                  <span className="font-semibold text-black/80">Score :</span>{" "}
-                  {conf.score ?? "—"}
-                </div>
-                <div className="mt-2">
-                  <span className="font-semibold text-black/80">Raisons :</span>
-                  <ul className="mt-2 list-disc pl-5">
-                    {(conf.reasons ?? []).map((x: string, i: number) => (
-                      <li key={i}>{x}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </Box>
-
-            {ugc?.script ? (
-              <Box>
-                <SectionTitle>Script UGC (court)</SectionTitle>
-                <div className="mt-4 whitespace-pre-line rounded-2xl border border-black/10 bg-white p-4 text-sm text-black/70">
-                  {ugc.script}
-                </div>
-                {ugc.duration_seconds ? (
-                  <div className="mt-2 text-xs text-black/50">
-                    Durée : ~{ugc.duration_seconds}s
-                  </div>
-                ) : null}
-              </Box>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-            <div className="text-sm font-semibold text-black/80">
-              🎓 Formation e-commerce
-            </div>
-            <div className="mt-1 text-sm text-black/60">
-              Apprends la méthode complète pour lancer et scaler proprement.
-            </div>
-            <a
-              href="#"
-              className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
-            >
-              Voir la formation
-            </a>
-          </div>
-
-          <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-            <div className="text-sm font-semibold text-black/80">
-              🎬 App vidéo (Yart)
-            </div>
-            <div className="mt-1 text-sm text-black/60">
-              Crée des vidéos ads vite pour tester tes produits.
-            </div>
-            <a
-              href="#"
-              className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
-            >
-              Accéder à Yart
-            </a>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
+ANALYSIS_SCHEMA: Dict[str, Any] = {
+    "positioning": {
+        "main_promise": "",
+        "target_customer": "",
+        "problem_solved": "",
+        "why_now": "",
+    },
+    "angles": {
+        "hooks": ["", "", ""],
+        "objections": [{"objection": "", "response": ""}],
+        "ugc_script": {"script": "", "duration_seconds": 20},
+    },
+    "risks": [{"type": "", "level": "low", "note": ""}],
+    "recommendations": {
+        "price_range": {"min": 0, "max": 0, "currency": "EUR"},
+        "channels": ["TikTok Ads"],
+        "upsells": [""],
+    },
+    "confidence": {"score": 0, "reasons": [""]},
 }
+
+
+# =============================================================================
+# SCHEMA ENFORCER + POSTPROCESS
+# =============================================================================
+
+def _merge_schema(schema: Any, data: Any) -> Any:
+    if isinstance(schema, dict):
+        out: Dict[str, Any] = {}
+        d = _ensure_dict(data)
+        for k, v in schema.items():
+            out[k] = _merge_schema(v, d.get(k))
+        return out
+
+    if isinstance(schema, list):
+        item_schema = schema[0] if schema else ""
+        arr = _ensure_list(data)
+        if not arr:
+            return schema
+        return [_merge_schema(item_schema, x) for x in arr]
+
+    if isinstance(schema, int):
+        return _coerce_int(data, schema)
+    if isinstance(schema, float):
+        return _coerce_float(data, schema)
+    return _clean_str(data)
+
+
+def _postprocess_analysis(a: Dict[str, Any]) -> Dict[str, Any]:
+    out = _merge_schema(ANALYSIS_SCHEMA, a)
+
+    hooks = _uniq_keep_order([_clean_str(x) for x in _ensure_list(_ensure_dict(out["angles"]).get("hooks"))])
+    out["angles"]["hooks"] = hooks[:3]
+
+    obj = _ensure_list(_ensure_dict(out["angles"]).get("objections"))
+    cleaned_obj: List[Dict[str, str]] = []
+    for it in obj[:3]:
+        d = _ensure_dict(it)
+        objection = _clean_str(d.get("objection"))
+        response = _clean_str(d.get("response"))
+        if objection and response:
+            cleaned_obj.append({"objection": objection, "response": response})
+    out["angles"]["objections"] = cleaned_obj
+
+    ugc = _ensure_dict(_ensure_dict(out["angles"]).get("ugc_script"))
+    dur = _coerce_int(ugc.get("duration_seconds"), 20)
+    out["angles"]["ugc_script"] = {
+        "script": _clean_str(ugc.get("script")),
+        "duration_seconds": int(_clamp(dur, 5, 60)),
+    }
+
+    risks = _ensure_list(out.get("risks"))
+    norm: List[Dict[str, str]] = []
+    for r in risks[:5]:
+        d = _ensure_dict(r)
+        lvl = _clean_str(d.get("level")).lower()
+        if lvl not in ("low", "medium", "high"):
+            lvl = "low"
+        risk_type = _clean_str(d.get("type"))
+        note = _clean_str(d.get("note"))
+        if risk_type or note:
+            norm.append({
+                "type": risk_type,
+                "level": lvl,
+                "note": note,
+            })
+    out["risks"] = norm
+
+    conf = _ensure_dict(out.get("confidence"))
+    cs = _coerce_int(conf.get("score"), 0)
+    reasons = _uniq_keep_order([_clean_str(x) for x in _ensure_list(conf.get("reasons"))])
+    out["confidence"] = {
+        "score": int(_clamp(cs, 0, 10)),
+        "reasons": reasons,
+    }
+
+    pr = _ensure_dict(_ensure_dict(out.get("recommendations")).get("price_range"))
+    mn = _coerce_int(pr.get("min"), 0)
+    mx = _coerce_int(pr.get("max"), 0)
+    mn = int(_clamp(mn, 0, 9999))
+    mx = int(_clamp(mx, 0, 9999))
+    if mn and mx and mn > mx:
+        mn, mx = mx, mn
+
+    rec = _ensure_dict(out.get("recommendations"))
+    out["recommendations"] = {
+        "price_range": {
+            "min": mn,
+            "max": mx,
+            "currency": _clean_str(pr.get("currency")) or "EUR",
+        },
+        "channels": _uniq_keep_order([_clean_str(x) for x in _ensure_list(rec.get("channels"))]),
+        "upsells": _uniq_keep_order([_clean_str(x) for x in _ensure_list(rec.get("upsells"))]),
+    }
+
+    pos = _ensure_dict(out.get("positioning"))
+    out["positioning"] = {
+        "main_promise": _clean_str(pos.get("main_promise")),
+        "target_customer": _clean_str(pos.get("target_customer")),
+        "problem_solved": _clean_str(pos.get("problem_solved")),
+        "why_now": _clean_str(pos.get("why_now")),
+    }
+
+    return out
+
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+
+def _is_placeholder_text(s: Any) -> bool:
+    t = _clean_str(s).lower()
+    if not t:
+        return True
+
+    bad = {
+        "...",
+        "…",
+        "[problème]",
+        "[probleme]",
+        "[douleur]",
+        "[pain point]",
+        "n/a",
+        "na",
+        "none",
+        "null",
+        "à compléter",
+        "a completer",
+    }
+    if t in bad:
+        return True
+    if "[" in t or "]" in t:
+        return True
+    return False
+
+
+def _analysis_missing_fields(a: Dict[str, Any]) -> List[str]:
+    missing: List[str] = []
+
+    pos = _ensure_dict(a.get("positioning"))
+    for k in ("main_promise", "target_customer", "problem_solved", "why_now"):
+        if _is_placeholder_text(pos.get(k)):
+            missing.append(f"positioning.{k}")
+
+    angles = _ensure_dict(a.get("angles"))
+
+    hooks = _ensure_list(angles.get("hooks"))
+    clean_hooks = [h for h in hooks if not _is_placeholder_text(h)]
+    if len(clean_hooks) < 3:
+        missing.append("angles.hooks")
+
+    objections = _ensure_list(angles.get("objections"))
+    valid_objections = 0
+    for o in objections:
+        d = _ensure_dict(o)
+        if not _is_placeholder_text(d.get("objection")) and not _is_placeholder_text(d.get("response")):
+            valid_objections += 1
+    if valid_objections < 2:
+        missing.append("angles.objections")
+
+    ugc = _ensure_dict(angles.get("ugc_script"))
+    if _is_placeholder_text(ugc.get("script")):
+        missing.append("angles.ugc_script.script")
+
+    risks = _ensure_list(a.get("risks"))
+    valid_risks = 0
+    for r in risks:
+        d = _ensure_dict(r)
+        if (
+            not _is_placeholder_text(d.get("type"))
+            and not _is_placeholder_text(d.get("note"))
+            and _clean_str(d.get("level")).lower() in ("low", "medium", "high")
+        ):
+            valid_risks += 1
+    if valid_risks < 1:
+        missing.append("risks")
+
+    rec = _ensure_dict(a.get("recommendations"))
+    channels = [x for x in _ensure_list(rec.get("channels")) if not _is_placeholder_text(x)]
+    if len(channels) < 2:
+        missing.append("recommendations.channels")
+
+    upsells = [x for x in _ensure_list(rec.get("upsells")) if not _is_placeholder_text(x)]
+    if len(upsells) < 1:
+        missing.append("recommendations.upsells")
+
+    conf = _ensure_dict(a.get("confidence"))
+    if _coerce_int(conf.get("score"), 0) <= 0:
+        missing.append("confidence.score")
+    reasons = [x for x in _ensure_list(conf.get("reasons")) if not _is_placeholder_text(x)]
+    if len(reasons) < 1:
+        missing.append("confidence.reasons")
+
+    return missing
+
+
+def _analysis_is_valid(a: Dict[str, Any]) -> bool:
+    return len(_analysis_missing_fields(a)) == 0
+
+
+# =============================================================================
+# JSON REPAIR
+# =============================================================================
+
+def _repair_to_schema(raw_text: str, product_payload: Dict[str, Any], geo: str = "FR") -> Dict[str, Any]:
+    raw_data = _safe_json_load(raw_text)
+    if not raw_data:
+        raw_data = {}
+
+    missing = _analysis_missing_fields(raw_data)
+
+    prompt = {
+        "task": "Complète uniquement les champs manquants ou invalides pour produire un JSON final valide.",
+        "market": geo,
+        "product": product_payload,
+        "current_json": raw_data,
+        "missing_fields": missing,
+        "rules": [
+            "Retourne uniquement un JSON valide.",
+            "Garde exactement le même schéma.",
+            "Interdiction de laisser des chaînes vides, ..., … ou placeholders entre crochets.",
+            "Les hooks doivent être concrets, spécifiques et publiables.",
+            "Les objections doivent contenir objection ET response.",
+            "Le script UGC doit être complet et naturel.",
+            "Sois spécifique au produit fourni.",
+        ],
+        "schema": ANALYSIS_SCHEMA,
+    }
+
+    txt = _chat_json_best_effort(
+        model=_model(),
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": "Réponds uniquement en JSON valide, complet, sans placeholders."},
+            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+        ],
+    )
+
+    return _safe_json_load(txt)
+
+
+# =============================================================================
+# GENERATE ANALYSIS
+# =============================================================================
+
+def generate_analysis(product_payload: Dict[str, Any], geo: str = "FR") -> Dict[str, Any]:
+    title = _clean_str(product_payload.get("title") or product_payload.get("name") or "")
+    if not title:
+        title = "ce produit"
+
+    prompt = {
+        "market": geo,
+        "schema": ANALYSIS_SCHEMA,
+        "product": product_payload,
+        "instructions": [
+            "Tu es un expert e-commerce et copywriting direct response.",
+            "Retourne uniquement un JSON valide.",
+            "Respecte exactement le schéma fourni, sans clé en plus.",
+            "Aucun champ important ne doit être vide.",
+            "Interdiction d'utiliser : ..., …, [problème], [douleur], placeholders ou texte générique non exploitable.",
+            "Les hooks doivent être courts, concrets, spécifiques au produit, publiables tels quels.",
+            "Donne exactement 3 hooks.",
+            "Donne 2 à 3 objections maximum, chaque objection doit avoir une objection ET une réponse complètes.",
+            "Le script UGC doit être complet, naturel, crédible et spécifique au produit.",
+            "Le positioning doit être concret et exploitable pour une fiche produit ou une pub.",
+            "Les risques doivent être réalistes et spécifiques.",
+            "Les channels et upsells doivent être cohérents avec le produit.",
+            "Ne laisse aucun champ stratégique vide.",
+        ],
+        "title": title,
+    }
+
+    txt = _chat_json_best_effort(
+        model=_model(),
+        temperature=0.4,
+        messages=[
+            {"role": "system", "content": "Réponds uniquement en JSON valide, complet, sans placeholders."},
+            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+        ],
+    )
+
+    data = _safe_json_load(txt)
+
+    if data and _analysis_is_valid(data):
+        return _postprocess_analysis(data)
+
+    repaired = _repair_to_schema(txt, product_payload, geo)
+    if repaired and _analysis_is_valid(repaired):
+        return _postprocess_analysis(repaired)
+
+    txt2 = _chat_json_best_effort(
+        model=_model(),
+        temperature=0.2,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Réponds uniquement en JSON valide. "
+                    "Aucun champ vide. Aucun placeholder. "
+                    "Si un champ est manquant, complète-le de manière spécifique au produit."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "product": product_payload,
+                        "market": geo,
+                        "schema": ANALYSIS_SCHEMA,
+                        "missing_requirements": _analysis_missing_fields(data or {}),
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ],
+    )
+
+    data2 = _safe_json_load(txt2)
+    if data2 and _analysis_is_valid(data2):
+        return _postprocess_analysis(data2)
+
+    best = data2 or repaired or data or {}
+    return _postprocess_analysis(best)
+
+
+# =============================================================================
+# OPTIONAL: PIPELINE HELPER
+# =============================================================================
+
+def analyze_from_caption(caption: str, geo: str = "FR") -> Dict[str, Any]:
+    name = extract_product_name(caption, geo)
+    if not name:
+        return {"ok": False, "reason": "no_product_found"}
+
+    sell = classify_sellability(name, geo)
+    if not sell["sellable"]:
+        return {"ok": False, "reason": "not_sellable", "sellability": sell, "product": name}
+
+    payload = {"title": name, "source_caption": caption}
+    analysis = generate_analysis(payload, geo)
+
+    return {"ok": True, "product": name, "sellability": sell, "analysis": analysis}
