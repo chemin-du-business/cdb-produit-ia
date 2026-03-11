@@ -602,10 +602,10 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h1 className="text-2xl font-extrabold tracking-tight">
-                Dashboard — Top produits (semaine)
+                Dashboard — Top produits de la semaine
               </h1>
               <p className="mt-1 text-sm text-black/60">
-                Run date actuelle :{" "}
+                Mise à jour :{" "}
                 <span className="font-semibold text-black/80">
                   {currentRunDate}
                 </span>
@@ -737,7 +737,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="text-lg font-extrabold tracking-tight">
-                  Run précédent
+                  Semaine précédente
                 </div>
                 <div className="text-sm text-black/60">
                   <span className="font-semibold text-black/80">
@@ -780,7 +780,7 @@ export default function DashboardPage() {
 
               {lastWeekProducts.length === 0 && (
                 <div className="rounded-3xl border border-black/10 bg-white/70 p-6 text-sm text-black/60">
-                  Aucun produit sur le run précédent.
+                  Aucun produit de la semaine précédente.
                 </div>
               )}
             </div>
