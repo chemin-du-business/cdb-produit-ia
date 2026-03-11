@@ -122,9 +122,9 @@ function FeatureCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="rounded-3xl border border-black/10 bg-white/75 p-6 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-white">
+    <div className="rounded-3xl border border-black/10 bg-white/75 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-white sm:p-6">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-black/5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-black/5">
           {icon}
         </div>
         <h3 className="text-base font-semibold text-black/90">{title}</h3>
@@ -144,9 +144,9 @@ function Step({
   desc: string;
 }) {
   return (
-    <div className="rounded-3xl border border-black/10 bg-white/75 p-6 shadow-sm backdrop-blur">
+    <div className="rounded-3xl border border-black/10 bg-white/75 p-5 shadow-sm backdrop-blur sm:p-6">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-black text-sm font-bold text-white">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-black text-sm font-bold text-white">
           {n}
         </div>
         <div className="text-base font-semibold text-black/90">{title}</div>
@@ -213,7 +213,12 @@ function HeroMediaCard({
 }) {
   return (
     <div className="overflow-hidden rounded-[28px] border border-black/10 bg-white">
-      <div className={cn("relative bg-black/5", large ? "h-[260px]" : "h-[180px]")}>
+      <div
+        className={cn(
+          "relative bg-black/5",
+          large ? "h-[220px] sm:h-[260px]" : "h-[160px] sm:h-[180px]"
+        )}
+      >
         <DemoMedia product={product} withControls={false} />
         <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
           {product.score}/100
@@ -262,33 +267,40 @@ export default async function HomePage() {
   const heroProducts = (products ?? []).slice(0, 3);
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] text-black">
-      <div className="pointer-events-none fixed inset-0">
+    <main className="min-h-screen overflow-x-hidden bg-[#f6f7fb] pt-[76px] text-black sm:pt-[84px]">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-48 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-300/40 via-sky-300/40 to-fuchsia-300/40 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-[320px] w-[520px] rounded-full bg-gradient-to-r from-sky-200/50 to-indigo-200/20 blur-3xl" />
       </div>
 
-      <header className="sticky top-0 z-50 border-b border-black/10 bg-white/70 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/[0.03]">
+      <header className="fixed inset-x-0 top-0 z-[100] w-full border-b border-black/10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
+          <Link href="/" className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/[0.03]">
               <span className="text-sm font-semibold text-black">CDB</span>
             </div>
-            <span className="text-sm font-semibold tracking-tight text-black">
+            <span className="truncate text-sm font-semibold tracking-tight text-black">
               CDB Produit IA
             </span>
           </Link>
 
-          <nav className="flex items-center gap-3">
+          <nav className="flex shrink-0 items-center gap-2 sm:gap-3">
             <Link
               href="/login"
-              className="rounded-2xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-semibold text-black/80 hover:bg-white"
+              className="inline-flex items-center justify-center rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90 sm:hidden"
+            >
+              Accéder à l’app
+            </Link>
+
+            <Link
+              href="/login"
+              className="hidden rounded-2xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-semibold text-black/80 hover:bg-white sm:inline-flex"
             >
               Se connecter
             </Link>
             <Link
               href="/login"
-              className="rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
+              className="hidden rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90 sm:inline-flex"
             >
               Créer un compte gratuit
             </Link>
@@ -296,23 +308,22 @@ export default async function HomePage() {
         </div>
       </header>
 
-      <section className="relative mx-auto w-full max-w-6xl px-6 pt-6">
-        <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
-          <div>
+      <section className="relative mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6">
+        <div className="grid gap-8 lg:grid-cols-2 lg:items-center lg:gap-10">
+          <div className="min-w-0">
             <div className="flex flex-wrap gap-2">
               <Pill>🇫🇷 France</Pill>
               <Pill>100% gratuit</Pill>
-              <Pill>🎥 Vidéos produits</Pill>
               <Pill>🤖 IA de détection</Pill>
             </div>
 
-            <h1 className="mt-5 text-4xl font-extrabold leading-[1.02] tracking-tight md:text-6xl">
+            <h1 className="mt-5 text-3xl font-extrabold leading-[1.02] tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
               Trouve des <span className="text-black">produits gagnants </span>
               avec l’IA,
               <span className="text-black/60"> lance-toi gratuitement.</span>
             </h1>
 
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-black/60 md:text-lg">
+            <p className="mt-5 max-w-xl text-sm leading-relaxed text-black/60 sm:text-base md:text-lg">
               CDB Produit IA utilise l’IA pour repérer des produits gagnants,
               les scorer, puis générer une analyse marketing claire pour passer
               plus vite au lancement.
@@ -332,30 +343,19 @@ export default async function HomePage() {
                 Voir la démo
               </a>
             </div>
-
-            <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-black/55">
-              <span className="font-semibold text-black/70">{weekLabel}</span>
-              <span className="text-black/20">•</span>
-              <span>Démo produit en direct</span>
-              <span className="text-black/20">•</span>
-              <span>Accès complet après connexion</span>
-            </div>
           </div>
 
-          <div className="rounded-[32px] border border-black/10 bg-white/75 p-6 shadow-sm backdrop-blur">
+          <div className="min-w-0 rounded-[32px] border border-black/10 bg-white/75 p-4 shadow-sm backdrop-blur sm:p-6">
             {heroProducts.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 {heroProducts.map((p, index) => (
-                  <div
-                    key={p.id}
-                    className={cn(index === 0 && "sm:col-span-2")}
-                  >
+                  <div key={p.id} className={cn(index === 0 && "sm:col-span-2")}>
                     <HeroMediaCard product={p} large={index === 0} />
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex min-h-[320px] items-center justify-center rounded-[28px] border border-black/10 bg-white text-sm text-black/50">
+              <div className="flex min-h-[260px] items-center justify-center rounded-[28px] border border-black/10 bg-white text-center text-sm text-black/50 sm:min-h-[320px]">
                 Les vidéos de démonstration apparaîtront ici.
               </div>
             )}
@@ -381,9 +381,9 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="relative mx-auto w-full max-w-6xl px-6 pt-10">
-        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 px-6 py-5 text-sm text-emerald-900">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <section className="relative mx-auto w-full max-w-6xl px-4 pt-10 sm:px-6">
+        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 px-5 py-5 text-sm text-emerald-900 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <span className="font-semibold">Application gratuite.</span>{" "}
               Accès complet après connexion.
@@ -398,7 +398,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="relative mx-auto w-full max-w-6xl px-6 pt-12">
+      <section className="relative mx-auto w-full max-w-6xl px-4 pt-12 sm:px-6">
         <div className="flex flex-col gap-2">
           <h2 className="text-2xl font-extrabold tracking-tight">
             Comment ça marche
@@ -429,14 +429,12 @@ export default async function HomePage() {
 
       <section
         id="demo"
-        className="relative mx-auto w-full max-w-6xl px-6 pb-20 pt-12"
+        className="relative mx-auto w-full max-w-6xl px-4 pb-20 pt-12 sm:px-6"
       >
-        <div className="flex items-end justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="text-2xl font-extrabold tracking-tight">
-              Démo gratuite
-            </h3>
-            <p className="mt-1 text-sm text-black/60">
+            <h3 className="text-2xl font-extrabold tracking-tight">Démo</h3>
+            <p className="mt-1 max-w-xl text-sm text-black/60">
               Un aperçu rapide avant d’accéder gratuitement à l’application
               complète.
             </p>
@@ -456,7 +454,7 @@ export default async function HomePage() {
               key={p.id}
               className="group overflow-hidden rounded-[32px] border border-black/10 bg-white/75 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-white"
             >
-              <div className="relative h-56 bg-black/5">
+              <div className="relative h-52 bg-black/5 sm:h-56">
                 <DemoMedia product={p} />
 
                 <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
@@ -509,13 +507,13 @@ export default async function HomePage() {
           </div>
         )}
 
-        <div className="mt-12 rounded-[32px] border border-black/10 bg-black p-8 text-white">
+        <div className="mt-12 rounded-[32px] border border-black/10 bg-black p-6 text-white sm:p-8">
           <div className="grid gap-6 md:grid-cols-[1.5fr_1fr] md:items-center">
             <div>
               <div className="text-sm font-semibold text-white/70">
                 Passe de la démo à l’application complète
               </div>
-              <h4 className="mt-2 text-3xl font-extrabold tracking-tight">
+              <h4 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">
                 Inscris-toi et commence gratuitement.
               </h4>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/70">
@@ -530,12 +528,6 @@ export default async function HomePage() {
               >
                 Créer mon compte gratuit
               </Link>
-              <a
-                href="#footer-links"
-                className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
-              >
-                Voir les informations légales
-              </a>
             </div>
           </div>
         </div>

@@ -30,9 +30,20 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Box({ children }: { children: React.ReactNode }) {
+function Box({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="rounded-[28px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
+    <div
+      className={[
+        "rounded-[28px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur",
+        className,
+      ].join(" ")}
+    >
       {children}
     </div>
   );
@@ -42,6 +53,14 @@ function Pill({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-black/70">
       {children}
+    </span>
+  );
+}
+
+function CPFBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-white/20 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-black">
+      CPF
     </span>
   );
 }
@@ -194,8 +213,10 @@ function ProductMedia({
               }
             }}
             className="absolute bottom-3 right-3 rounded-2xl bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
+            aria-label={muted ? "Activer le son" : "Couper le son"}
+            title={muted ? "Activer le son" : "Couper le son"}
           >
-            {muted ? "Démute" : "Mute"}
+            {muted ? "🔇" : "🔊"}
           </button>
         ) : null}
 
@@ -307,17 +328,11 @@ export default function ProductPage() {
         >
           ← Retour dashboard
         </Link>
-        <div className="flex items-center gap-2">
-          <Pill>{p.category}</Pill>
-          <div className="rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
-            {p.score}/100
-          </div>
-        </div>
       </header>
 
       <section className="relative mx-auto w-full max-w-6xl px-6 pb-16">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Box>
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          <Box className="self-start">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs font-semibold text-black/50">
@@ -329,14 +344,7 @@ export default function ProductPage() {
                 <p className="mt-3 text-sm text-black/60">{p.summary}</p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {(p.tags ?? []).map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs font-medium text-black/70"
-                    >
-                      {t}
-                    </span>
-                  ))}
+                  <Pill>{p.category}</Pill>
                 </div>
               </div>
             </div>
@@ -349,24 +357,6 @@ export default function ProductPage() {
                 videoStorageUrl={p.video_storage_url}
                 score={p.score}
               />
-            </div>
-
-            <div className="mt-3 text-xs text-black/50">
-              Image : {p.image_source ?? "n/a"}
-              {p.source_url ? (
-                <>
-                  {" "}
-                  •{" "}
-                  <a
-                    className="underline hover:text-black"
-                    href={p.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    source
-                  </a>
-                </>
-              ) : null}
             </div>
           </Box>
 
@@ -533,25 +523,26 @@ export default function ProductPage() {
               Apprends la méthode complète pour lancer et scaler proprement.
             </div>
             <a
-              href="#"
-              className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
+              href="https://calendly.com/contact-chemindubusiness/reservez-votre-rendez-vous-gratuit"
+              className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
             >
-              Voir la formation
+              <span>Voir la formation</span>
+              <CPFBadge />
             </a>
           </div>
 
           <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
             <div className="text-sm font-semibold text-black/80">
-              🎬 App vidéo (Yart)
+              🎬 App CDB Video IA
             </div>
             <div className="mt-1 text-sm text-black/60">
               Crée des vidéos ads vite pour tester tes produits.
             </div>
             <a
-              href="#"
+              href="https://cdbvideoia.com/"
               className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
             >
-              Accéder à Yart
+              Accéder à CDB Video IA
             </a>
           </div>
         </div>

@@ -13,8 +13,31 @@ function Pill({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Check() {
-  return <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600/70" />;
+function GoogleIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+    >
+      <path
+        fill="#EA4335"
+        d="M12 10.2v3.9h5.4c-.2 1.2-.9 2.3-1.9 3l3.1 2.4c1.8-1.7 2.9-4.1 2.9-6.9 0-.7-.1-1.5-.2-2.2H12Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 21c2.6 0 4.8-.9 6.4-2.4l-3.1-2.4c-.9.6-2 .9-3.3.9-2.5 0-4.6-1.7-5.3-4H3.5v2.5C5.1 18.9 8.2 21 12 21Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.7 13.1c-.2-.6-.3-1.2-.3-1.9s.1-1.3.3-1.9V6.8H3.5C2.9 8 2.5 9.3 2.5 10.6s.4 2.6 1 3.8l3.2-1.3Z"
+      />
+      <path
+        fill="#4285F4"
+        d="M12 5.1c1.4 0 2.7.5 3.6 1.4l2.7-2.7C16.8 2.2 14.6 1.2 12 1.2c-3.8 0-6.9 2.1-8.5 5.2l3.2 2.5c.7-2.3 2.8-3.8 5.3-3.8Z"
+      />
+    </svg>
+  );
 }
 
 export default function LoginPage() {
@@ -92,8 +115,6 @@ export default function LoginPage() {
           <div>
             <div className="flex flex-wrap gap-2">
               <Pill>100% gratuit</Pill>
-              <Pill>Connexion rapide</Pill>
-              <Pill>Accès immédiat à l’app</Pill>
             </div>
 
             <h1 className="mt-5 text-4xl font-extrabold leading-[1.04] tracking-tight md:text-5xl">
@@ -107,34 +128,6 @@ export default function LoginPage() {
               produits détectés, leur scoring, et les analyses IA qui t’aident à
               choisir plus vite quoi lancer.
             </p>
-
-            <div className="mt-8 rounded-[28px] border border-black/10 bg-white/70 p-5 shadow-sm backdrop-blur">
-              <div className="text-sm font-semibold text-black/80">
-                Ce que tu débloques dans l’application
-              </div>
-              <ul className="mt-4 space-y-3 text-sm text-black/60">
-                <li className="flex gap-2">
-                  <Check />
-                  <span>Les produits gagnants détectés par l’IA</span>
-                </li>
-                <li className="flex gap-2">
-                  <Check />
-                  <span>Le scoring produit selon plusieurs signaux</span>
-                </li>
-                <li className="flex gap-2">
-                  <Check />
-                  <span>Les analyses marketing pour passer plus vite au lancement</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-black/55">
-              <span className="font-semibold text-black/70">Application gratuite</span>
-              <span className="text-black/20">•</span>
-              <span>Connexion en 1 minute</span>
-              <span className="text-black/20">•</span>
-              <span>Accès direct à l’app</span>
-            </div>
           </div>
 
           <div className="rounded-[32px] border border-black/10 bg-white/75 p-6 shadow-sm backdrop-blur">
@@ -145,9 +138,6 @@ export default function LoginPage() {
                   Accéder à l’application
                 </div>
               </div>
-              <div className="rounded-2xl bg-black px-3 py-2 text-xs font-bold text-white">
-                Gratuit
-              </div>
             </div>
 
             <p className="mt-3 text-sm leading-relaxed text-black/60">
@@ -157,9 +147,10 @@ export default function LoginPage() {
             <button
               onClick={loginGoogle}
               disabled={loading}
-              className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white hover:bg-black/90 disabled:opacity-60"
+              className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white hover:bg-black/90 disabled:opacity-60"
             >
-              Continuer avec Google
+              <GoogleIcon />
+              <span>Continuer avec Google</span>
             </button>
 
             <div className="my-5 flex items-center gap-3">
