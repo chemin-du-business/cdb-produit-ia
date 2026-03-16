@@ -733,10 +733,10 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="mt-10 rounded-[28px] border border-black/10 bg-white/60 p-5">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="text-lg font-extrabold tracking-tight">
+          <div className="mt-10 rounded-[28px] border border-black/10 bg-white/60 p-4 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0">
+                <div className="text-lg font-extrabold tracking-tight sm:text-xl">
                   Semaine précédente
                 </div>
                 <div className="text-sm text-black/60">
@@ -745,35 +745,47 @@ export default function DashboardPage() {
                   </span>
                 </div>
               </div>
-              <Pill>{lastWeekProducts.length} produits</Pill>
+
+              <div className="w-full sm:w-auto">
+                <Pill>{lastWeekProducts.length} produits</Pill>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {lastWeekProducts.map((p, idx) => (
                 <div
                   key={p.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2 hover:bg-white"
+                  className="rounded-2xl border border-black/10 bg-white px-3 py-3 hover:bg-white sm:px-4"
                 >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-black/85">
-                      {idx + 1}. {p.title}
-                    </div>
-                    <div className="truncate text-xs text-black/55">
-                      {p.category} • {(p.sources ?? []).join(", ")}
-                    </div>
-                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-semibold leading-snug text-black/85 sm:text-sm">
+                        <span className="mr-1">{idx + 1}.</span>
+                        <span className="line-clamp-2 break-words">
+                          {p.title}
+                        </span>
+                      </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="shrink-0 rounded-2xl bg-black px-3 py-1 text-xs font-extrabold text-white">
-                      {p.score}
+                      <div className="mt-1 line-clamp-2 break-words text-xs text-black/55">
+                        {p.category} • {(p.sources ?? []).join(", ")}
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/app/product/${p.slug}`)}
-                      className="shrink-0 rounded-2xl border border-black/10 bg-white px-3 py-1 text-xs font-extrabold text-black/80 hover:bg-white"
-                    >
-                      En savoir plus
-                    </button>
+
+                    <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
+                      <div className="shrink-0 rounded-2xl bg-black px-3 py-1.5 text-xs font-extrabold text-white">
+                        {p.score}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/app/product/${p.slug}`)}
+                        className="min-w-0 flex-1 rounded-2xl border border-black/10 bg-white px-3 py-2 text-xs font-extrabold text-black/80 hover:bg-white sm:flex-none"
+                      >
+                        <span className="block truncate sm:truncate-none">
+                          En savoir plus
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
