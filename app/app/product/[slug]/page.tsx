@@ -523,7 +523,7 @@ export default function ProductPage() {
               Apprends la méthode complète pour lancer et scaler proprement.
             </div>
             <a
-              href="https://calendly.com/contact-chemindubusiness/reservez-votre-rendez-vous-gratuit"
+              href="https://www.chemindubusiness.fr/"
               className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
             >
               <span>Voir la formation</span>

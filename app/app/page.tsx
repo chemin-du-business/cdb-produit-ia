@@ -582,7 +582,7 @@ export default function DashboardPage() {
 
         <div className="mt-4 flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
           <a
-            href="https://calendly.com/contact-chemindubusiness/reservez-votre-rendez-vous-gratuit"
+            href="https://www.chemindubusiness.fr/"
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
           >
             <span>Découvrir la formation</span>
