@@ -251,13 +251,31 @@ export default async function HomePage() {
   const teaserN = 3;
   const currentRunDate = String(settings.get("current_run_date")?.v ?? "");
 
-  const { data: products } = await supabase
+  // Récupère le run_date le plus récent directement depuis les produits
+  const { data: latestRunRow } = await supabase
+    .from("products")
+    .select("run_date")
+    .eq("is_hidden", false)
+    .order("run_date", { ascending: false })
+    .limit(1)
+    .single();
+
+  const latestRunDate = latestRunRow?.run_date ?? currentRunDate ?? null;
+
+  const productsQuery = supabase
     .from("products")
     .select(
       "id,title,slug,category,score,tags,sources,summary,analysis,image_url,video_storage_url"
     )
+    .eq("is_hidden", false)
     .order("score", { ascending: false })
     .limit(teaserN);
+
+  if (latestRunDate) {
+    productsQuery.eq("run_date", latestRunDate);
+  }
+
+  const { data: products } = await productsQuery;
 
   const weekLabel = currentRunDate
     ? `Semaine du ${currentRunDate}`
