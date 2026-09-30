@@ -345,8 +345,8 @@ export default async function HomePage() {
 
             <p className="mt-5 max-w-xl text-sm leading-relaxed text-black/60 sm:text-base md:text-lg">
               CDB Produit IA utilise l’IA pour repérer des produits à vendre,
-              les scorer, puis générer une analyse marketing claire pour passer
-              plus vite au lancement.
+              les scorer, puis générer une analyse marketing claire pour
+              trouver le bon produit à vendre et lancer plus vite.
             </p>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
