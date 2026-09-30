@@ -344,7 +344,7 @@ export default async function HomePage() {
             </h1>
 
             <p className="mt-5 max-w-xl text-sm leading-relaxed text-black/60 sm:text-base md:text-lg">
-              CDB Produit IA utilise l’IA pour repérer des produits gagnants,
+              CDB Produit IA utilise l’IA pour repérer des produits à vendre,
               les scorer, puis générer une analyse marketing claire pour passer
               plus vite au lancement.
             </p>
@@ -384,7 +384,7 @@ export default async function HomePage() {
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           <FeatureCard
-            title="Produits gagnants"
+            title="Produits à vendre"
             desc="L’IA détecte les meilleures opportunités e-commerce."
             icon={<span className="text-lg">🔎</span>}
           />
@@ -562,7 +562,7 @@ export default async function HomePage() {
                 © {new Date().getFullYear()} CDB Produit IA
               </div>
               <div className="mt-1 text-xs text-black/45">
-                Produits gagnants, scoring IA et analyse marketing.
+                Produits à vendre, scoring IA et analyse marketing.
               </div>
             </div>
 
