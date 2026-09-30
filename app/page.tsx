@@ -338,8 +338,8 @@ export default async function HomePage() {
             </div>
 
             <h1 className="mt-5 text-3xl font-extrabold leading-[1.02] tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
-              Trouve des <span className="text-black">produits gagnants </span>
-              avec l’IA,
+              Trouve des <span className="text-black">produits à vendre </span>
+              grâce à l’IA,
               <span className="text-black/60"> lance-toi gratuitement.</span>
             </h1>
 
