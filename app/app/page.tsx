@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -22,12 +23,21 @@ type Product = {
   slug: string;
   category: string;
   score: number;
+  status?: string;
   sources: string[];
   summary: string;
   image_url: string | null;
   source_url: string | null;
   video_storage_url: string | null;
   analysis?: ProductAnalysis | null;
+  score_breakdown?: {
+    tiktok?: number;
+    amazon?: number;
+    google_trends?: number;
+    google_shopping?: number;
+    meta_ads?: number;
+    tiktok_shop?: number;
+  } | null;
 };
 
 function Pill({ children }: { children: React.ReactNode }) {
@@ -35,6 +45,66 @@ function Pill({ children }: { children: React.ReactNode }) {
     <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-black/70">
       {children}
     </span>
+  );
+}
+
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+  "Émergent":    { label: "Émergent",    bg: "bg-violet-100",  text: "text-violet-700", dot: "bg-violet-500" },
+  "En tendance": { label: "En tendance", bg: "bg-orange-100",  text: "text-orange-700", dot: "bg-orange-500" },
+  "Populaire":   { label: "Populaire",   bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500" },
+  "En regain":   { label: "En regain",   bg: "bg-sky-100",     text: "text-sky-700",    dot: "bg-sky-500" },
+  "En déclin":   { label: "En déclin",   bg: "bg-red-100",     text: "text-red-600",    dot: "bg-red-500" },
+};
+
+function StatusBadge({ status }: { status?: string }) {
+  const cfg = STATUS_CONFIG[status ?? ""] ?? { label: status ?? "—", bg: "bg-black/5", text: "text-black/50", dot: "bg-black/30" };
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${cfg.bg} ${cfg.text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+      {cfg.label}
+    </span>
+  );
+}
+
+const SOURCE_COLORS: Record<string, { bar: string; label: string }> = {
+  tiktok:          { bar: "bg-black",         label: "TikTok" },
+  amazon:          { bar: "bg-orange-400",    label: "Amazon" },
+  google_trends:   { bar: "bg-blue-400",      label: "G. Trends" },
+  google_shopping: { bar: "bg-indigo-400",    label: "G. Shopping" },
+  meta_ads:        { bar: "bg-sky-500",       label: "Meta" },
+  tiktok_shop:     { bar: "bg-pink-500",      label: "TikTok Shop" },
+};
+
+const SOURCE_MAX: Record<string, number> = {
+  tiktok: 40, amazon: 20, google_trends: 10, google_shopping: 10, meta_ads: 10, tiktok_shop: 10,
+};
+
+function ScoreBreakdown({ breakdown }: { breakdown: Product["score_breakdown"] }) {
+  if (!breakdown) return null;
+  const entries = Object.entries(breakdown).filter(([, v]) => v !== undefined && v !== null);
+  if (!entries.length) return null;
+  return (
+    <div className="mt-3 space-y-1.5">
+      {entries.map(([key, val]) => {
+        const cfg = SOURCE_COLORS[key] ?? { bar: "bg-black/40", label: key };
+        const max = SOURCE_MAX[key] ?? 20;
+        const pct = Math.min(100, Math.round(((val as number) / max) * 100));
+        return (
+          <div key={key} className="flex items-center gap-2">
+            <div className="w-20 shrink-0 text-[10px] text-black/50 truncate">{cfg.label}</div>
+            <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
+              <motion.div
+                className={`h-full rounded-full ${cfg.bar}`}
+                initial={{ width: 0 }}
+                animate={{ width: `${pct}%` }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+              />
+            </div>
+            <div className="w-5 shrink-0 text-right text-[10px] font-semibold text-black/60">{val as number}</div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -405,7 +475,7 @@ async function fetchProductsByRunDate(runDate: string) {
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id,run_date,created_at,title,slug,category,score,sources,summary,analysis,image_url,source_url,video_storage_url,is_hidden,mode"
+      "id,run_date,created_at,title,slug,category,score,status,sources,summary,analysis,score_breakdown,image_url,source_url,video_storage_url,is_hidden,mode"
     )
     .eq("run_date", runDate)
     .eq("is_hidden", false)
@@ -432,6 +502,7 @@ export default function DashboardPage() {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("all");
   const [source, setSource] = useState("all");
+  const [status, setStatus] = useState("all");
   const [minScore, setMinScore] = useState(0);
 
   const categories = useMemo(() => {
@@ -453,6 +524,7 @@ export default function DashboardPage() {
       .filter((p) =>
         source === "all" ? true : (p.sources ?? []).includes(source)
       )
+      .filter((p) => status === "all" ? true : (p.status ?? "Émergent") === status)
       .filter((p) => p.score >= minScore)
       .filter((p) => {
         if (!query) return true;
@@ -460,7 +532,7 @@ export default function DashboardPage() {
         return hay.includes(query);
       })
       .sort((a, b) => b.score - a.score);
-  }, [products, q, category, source, minScore]);
+  }, [products, q, category, source, status, minScore]);
 
   useEffect(() => {
     let mounted = true;
@@ -668,6 +740,28 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          <div className="mt-3 flex flex-wrap gap-2">
+            {["all", "Émergent", "En tendance", "Populaire", "En regain", "En déclin"].map((s) => {
+              const cfg = STATUS_CONFIG[s];
+              const active = status === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                    active
+                      ? cfg ? `${cfg.bg} ${cfg.text} shadow-sm` : "bg-black text-white"
+                      : "bg-black/[0.04] text-black/55 hover:bg-black/[0.08]"
+                  }`}
+                >
+                  {cfg && active && <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />}
+                  {s === "all" ? "Tous" : s}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="mt-4 flex items-center gap-3">
             <div className="text-xs font-semibold text-black/60">
               Score min
@@ -683,55 +777,81 @@ export default function DashboardPage() {
             <Pill>{minScore}</Pill>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((p) => (
-              <div
-                key={p.id}
-                className="group overflow-hidden rounded-[32px] border border-black/10 bg-white/80 shadow-sm hover:bg-white"
-              >
-                <div className="relative aspect-[9/16] w-full bg-black/5">
-                  <MediaHero p={p} />
+          <motion.div
+            className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            initial="hidden"
+            animate="visible"
+            variants={{ visible: { transition: { staggerChildren: 0.07 } } }}
+          >
+            <AnimatePresence mode="popLayout">
+              {filtered.map((p) => (
+                <motion.div
+                  key={p.id}
+                  layout
+                  variants={{
+                    hidden: { opacity: 0, y: 24, scale: 0.97 },
+                    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: "easeOut" } },
+                  }}
+                  exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                  className="group overflow-hidden rounded-[32px] border border-black/10 bg-white/80 shadow-sm"
+                >
+                  <div className="relative aspect-[9/16] w-full bg-black/5">
+                    <MediaHero p={p} />
 
-                  <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
-                    {p.score}/100
+                    <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
+                      {p.score}/100
+                    </div>
+
+                    {p.status && (
+                      <div className="absolute left-3 top-3">
+                        <StatusBadge status={p.status} />
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                <div className="p-5">
-                  <div className="text-xs font-semibold text-black/50">
-                    {p.category}
+                  <div className="p-5">
+                    <div className="text-xs font-semibold text-black/50">
+                      {p.category}
+                    </div>
+                    <div className="mt-1 line-clamp-2 text-lg font-extrabold tracking-tight text-black/90">
+                      {p.title}
+                    </div>
+
+                    <p className="mt-3 line-clamp-2 text-sm text-black/60">
+                      {p.summary}
+                    </p>
+
+                    <ScoreBreakdown breakdown={p.score_breakdown} />
+
+                    <RiskBlock risks={p.analysis?.risks} />
+
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/app/product/${p.slug}`)}
+                      className="mt-4 inline-flex w-full items-center justify-center rounded-[28px] bg-black px-4 py-4 text-sm font-extrabold text-white hover:bg-black/90 active:scale-[0.98] transition-transform"
+                    >
+                      Voir l’analyse complète
+                    </button>
+
+                    <div className="mt-3 text-xs text-black/45">
+                      {(p.sources ?? []).join(" · ")}
+                    </div>
                   </div>
-                  <div className="mt-1 line-clamp-2 text-lg font-extrabold tracking-tight text-black/90">
-                    {p.title}
-                  </div>
-
-                  <p className="mt-4 line-clamp-2 text-sm text-black/60">
-                    {p.summary}
-                  </p>
-
-                  <RiskBlock risks={p.analysis?.risks} />
-
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/app/product/${p.slug}`)}
-                    className="mt-4 inline-flex w-full items-center justify-center rounded-[28px] bg-black px-4 py-4 text-sm font-extrabold text-white hover:bg-black/90"
-                  >
-                    Voir l’analyse complète
-                  </button>
-
-                  <div className="mt-4 text-xs text-black/45">
-                    Sources : {(p.sources ?? []).join(", ")}
-                  </div>
-                </div>
-              </div>
-            ))}
+                </motion.div>
+              ))}
+            </AnimatePresence>
 
             {filtered.length === 0 && (
-              <div className="rounded-3xl border border-black/10 bg-white/70 p-6 text-sm text-black/60">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="rounded-3xl border border-black/10 bg-white/70 p-6 text-sm text-black/60"
+              >
                 Aucun produit avec ces filtres.
-              </div>
+              </motion.div>
             )}
-          </div>
+          </motion.div>
 
           <div className="mt-10 rounded-[28px] border border-black/10 bg-white/60 p-4 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
