@@ -25,11 +25,11 @@ type Product = {
 };
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; dot: string }> = {
-  "Émergent":    { bg: "bg-violet-100",  text: "text-violet-700", dot: "bg-violet-500" },
-  "En tendance": { bg: "bg-orange-100",  text: "text-orange-700", dot: "bg-orange-500" },
-  "Populaire":   { bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500" },
-  "En regain":   { bg: "bg-sky-100",     text: "text-sky-700",    dot: "bg-sky-500" },
-  "En déclin":   { bg: "bg-red-100",     text: "text-red-600",    dot: "bg-red-500" },
+  "Émergent":    { bg: "bg-violet-500/20 border border-violet-500/30",  text: "text-violet-300", dot: "bg-violet-400" },
+  "En tendance": { bg: "bg-orange-500/20 border border-orange-500/30",  text: "text-orange-300", dot: "bg-orange-400" },
+  "Populaire":   { bg: "bg-emerald-500/20 border border-emerald-500/30", text: "text-emerald-300", dot: "bg-emerald-400" },
+  "En regain":   { bg: "bg-sky-500/20 border border-sky-500/30",     text: "text-sky-300",    dot: "bg-sky-400" },
+  "En déclin":   { bg: "bg-red-500/20 border border-red-500/30",     text: "text-red-300",    dot: "bg-red-400" },
 };
 
 const SOURCE_COLORS: Record<string, { bar: string; label: string }> = {
@@ -47,7 +47,7 @@ const SOURCE_MAX: Record<string, number> = {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-lg font-extrabold tracking-tight text-black/90">
+    <h2 className="text-lg font-bold tracking-tight text-white/90">
       {children}
     </h2>
   );
@@ -63,7 +63,7 @@ function Box({
   return (
     <div
       className={[
-        "rounded-[28px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur",
+        "rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5 backdrop-blur",
         className,
       ].join(" ")}
     >
@@ -74,7 +74,7 @@ function Box({
 
 function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-black/70">
+    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/60">
       {children}
     </span>
   );
@@ -158,7 +158,7 @@ function ProductMedia({
   const tiktokId = extractTikTokVideoId(sourceUrl);
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-black/10 bg-black/5">
+    <div className="overflow-hidden rounded-[28px] border border-white/[0.07] bg-black/5">
       <div className="relative aspect-[9/16] w-full bg-black">
         {videoStorageUrl && !videoError ? (
           <video
@@ -276,18 +276,23 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
   const [activeTab, setActiveTab] = useState<string>("analyse");
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] text-black">
-      <div className="pointer-events-none fixed inset-0">
-        <div className="absolute -top-48 left-1/2 h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-300/30 via-sky-300/30 to-fuchsia-300/30 blur-3xl" />
+    <main className="min-h-screen bg-[#06060a] text-white overflow-x-hidden">
+      {/* Glows */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-violet-600/15 blur-[120px]" />
+        <div className="absolute top-1/3 -right-40 h-[300px] w-[400px] rounded-full bg-orange-500/8 blur-[100px]" />
+        <div className="absolute bottom-0 -left-40 h-[300px] w-[400px] rounded-full bg-indigo-600/10 blur-[100px]" />
       </div>
 
-      <header className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <button onClick={onBack} className="text-sm font-semibold text-black/70 hover:text-black">
-          ← Retour dashboard
-        </button>
+      <header className="relative z-10 border-b border-white/[0.06] bg-[#06060a]/80 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-4">
+          <button onClick={onBack} className="flex items-center gap-2 text-sm font-semibold text-white/50 hover:text-white transition-colors">
+            <span>←</span> Retour dashboard
+          </button>
+        </div>
       </header>
 
-      <section className="relative mx-auto w-full max-w-6xl px-6 pb-16">
+      <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-16 pt-6">
         <div className="grid items-start gap-6 lg:grid-cols-[1fr_1.4fr]">
 
           {/* Left col — media + meta */}
@@ -307,8 +312,8 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                   </span>
                 )}
               </div>
-              <h1 className="mt-3 text-2xl font-extrabold tracking-tight">{p.title}</h1>
-              <p className="mt-2 text-sm text-black/60">{p.summary}</p>
+              <h1 className="mt-3 text-2xl font-bold tracking-tight text-white">{p.title}</h1>
+              <p className="mt-2 text-sm text-white/50">{p.summary}</p>
 
               <div className="mt-5">
                 <ProductMedia
@@ -320,7 +325,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                 />
               </div>
 
-              <div className="mt-4 text-xs text-black/45">
+              <div className="mt-4 text-xs text-white/30">
                 {(p.sources ?? []).join(" · ")}
               </div>
             </Box>
@@ -334,7 +339,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
             className="space-y-4"
           >
             {/* Tab bar */}
-            <div className="flex gap-1 rounded-2xl border border-black/10 bg-white/60 p-1 backdrop-blur">
+            <div className="flex gap-1 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-1 backdrop-blur">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -345,11 +350,11 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                   {activeTab === tab.id && (
                     <motion.div
                       layoutId="tab-bg"
-                      className="absolute inset-0 rounded-xl bg-black"
+                      className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-orange-500"
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
                   )}
-                  <span className={`relative z-10 ${activeTab === tab.id ? "text-white" : "text-black/55"}`}>
+                  <span className={`relative z-10 ${activeTab === tab.id ? "text-white" : "text-white/40"}`}>
                     {tab.label}
                   </span>
                 </button>
@@ -370,7 +375,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                   <>
                     <Box>
                       <SectionTitle>Positionnement</SectionTitle>
-                      <div className="mt-4 space-y-3 text-sm text-black/70">
+                      <div className="mt-4 space-y-3 text-sm text-white/60">
                         {[
                           ["Promesse", positioning.main_promise],
                           ["Cible", positioning.target_customer],
@@ -378,7 +383,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                           ["Pourquoi maintenant", positioning.why_now],
                         ].map(([label, value]) => (
                           <div key={label as string}>
-                            <span className="font-semibold text-black/80">{label} :</span>{" "}
+                            <span className="font-semibold text-white/80">{label} :</span>{" "}
                             {value ?? "—"}
                           </div>
                         ))}
@@ -387,17 +392,17 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
 
                     <Box>
                       <SectionTitle>Recommandations</SectionTitle>
-                      <div className="mt-4 space-y-2 text-sm text-black/70">
+                      <div className="mt-4 space-y-2 text-sm text-white/60">
                         <div>
-                          <span className="font-semibold text-black/80">Prix :</span>{" "}
+                          <span className="font-semibold text-white/80">Prix :</span>{" "}
                           {recos.price_range?.min ?? "—"} – {recos.price_range?.max ?? "—"} {recos.price_range?.currency ?? ""}
                         </div>
                         <div>
-                          <span className="font-semibold text-black/80">Canaux :</span>{" "}
+                          <span className="font-semibold text-white/80">Canaux :</span>{" "}
                           {(recos.channels ?? []).join(", ") || "—"}
                         </div>
                         <div>
-                          <span className="font-semibold text-black/80">Upsells :</span>{" "}
+                          <span className="font-semibold text-white/80">Upsells :</span>{" "}
                           {(recos.upsells ?? []).join(", ") || "—"}
                         </div>
                       </div>
@@ -407,10 +412,10 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                       <SectionTitle>Confiance IA</SectionTitle>
                       <div className="mt-4 flex items-center gap-4">
                         <div className="text-3xl font-extrabold">{conf.score ?? "—"}</div>
-                        <ul className="mt-1 space-y-1 text-xs text-black/60">
+                        <ul className="mt-1 space-y-1 text-xs text-white/50">
                           {(conf.reasons ?? []).map((x: string, i: number) => (
                             <li key={i} className="flex items-start gap-1.5">
-                              <span className="mt-0.5 text-black/30">•</span>{x}
+                              <span className="mt-0.5 text-white/20">•</span>{x}
                             </li>
                           ))}
                         </ul>
@@ -430,11 +435,11 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.06 }}
-                            className="rounded-2xl border border-black/10 bg-white p-3 text-sm text-black/70"
+                            className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-3 text-sm text-white/60"
                           >
-                            <span className="font-semibold text-black/80">#{i + 1}</span>{" "}{h}
+                            <span className="font-semibold text-white/80">#{i + 1}</span>{" "}{h}
                           </motion.div>
-                        )) : <div className="text-sm text-black/60">—</div>}
+                        )) : <div className="text-sm text-white/50">—</div>}
                       </div>
                     </Box>
 
@@ -448,12 +453,12 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                               initial={{ opacity: 0, x: -10 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: i * 0.06 }}
-                              className="rounded-2xl border border-black/10 bg-white p-4 text-sm"
+                              className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 text-sm"
                             >
-                              <div className="font-semibold text-black/80">Objection</div>
-                              <div className="mt-1 text-black/70">{o.objection}</div>
-                              <div className="mt-3 font-semibold text-black/80">Réponse</div>
-                              <div className="mt-1 text-black/70">{o.response}</div>
+                              <div className="font-semibold text-white/80">Objection</div>
+                              <div className="mt-1 text-white/60">{o.objection}</div>
+                              <div className="mt-3 font-semibold text-white/80">Réponse</div>
+                              <div className="mt-1 text-white/60">{o.response}</div>
                             </motion.div>
                           ))}
                         </div>
@@ -463,11 +468,11 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                     {ugc?.script && (
                       <Box>
                         <SectionTitle>Script UGC</SectionTitle>
-                        <div className="mt-4 whitespace-pre-line rounded-2xl border border-black/10 bg-white p-4 text-sm text-black/70">
+                        <div className="mt-4 whitespace-pre-line rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 text-sm text-white/60">
                           {ugc.script}
                         </div>
                         {ugc.duration_seconds && (
-                          <div className="mt-2 text-xs text-black/50">Durée : ~{ugc.duration_seconds}s</div>
+                          <div className="mt-2 text-xs text-white/40">Durée : ~{ugc.duration_seconds}s</div>
                         )}
                       </Box>
                     )}
@@ -484,15 +489,15 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: i * 0.07 }}
-                          className="flex items-start justify-between gap-3 rounded-2xl border border-black/10 bg-white p-3 text-sm"
+                          className="flex items-start justify-between gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-3 text-sm"
                         >
-                          <div className="text-black/70">
+                          <div className="text-white/60">
                             <RiskLevelBadge level={r.level} />
-                            <span className="font-semibold text-black/80">{r.type}</span> — {r.note}
+                            <span className="font-semibold text-white/80">{r.type}</span> — {r.note}
                           </div>
-                          <span className="shrink-0 rounded-full bg-black/[0.07] px-2.5 py-1 text-[10px] font-semibold text-black/60">{r.level}</span>
+                          <span className="shrink-0 rounded-full bg-white/[0.07] px-2.5 py-1 text-[10px] font-semibold text-white/50">{r.level}</span>
                         </motion.div>
-                      )) : <div className="text-sm text-black/60">Aucun risque identifié.</div>}
+                      )) : <div className="text-sm text-white/50">Aucun risque identifié.</div>}
                     </div>
                   </Box>
                 )}
@@ -502,7 +507,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                     <SectionTitle>Score par source</SectionTitle>
                     <div className="mt-2 mb-5 flex items-baseline gap-2">
                       <span className="text-4xl font-extrabold">{p.score}</span>
-                      <span className="text-sm text-black/50">/ 100</span>
+                      <span className="text-sm text-white/40">/ 100</span>
                       {p.status && statusCfg && (
                         <span className={`ml-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusCfg.bg} ${statusCfg.text}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${statusCfg.dot}`} />
@@ -519,10 +524,10 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                           return (
                             <motion.div key={key} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.07 }}>
                               <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-sm font-semibold text-black/70">{cfg.label}</span>
-                                <span className="text-sm font-extrabold text-black/80">{val as number} <span className="text-xs font-normal text-black/40">/ {max}</span></span>
+                                <span className="text-sm font-semibold text-white/60">{cfg.label}</span>
+                                <span className="text-sm font-extrabold text-white/80">{val as number} <span className="text-xs font-normal text-white/30">/ {max}</span></span>
                               </div>
-                              <div className="h-2.5 w-full rounded-full bg-black/[0.07] overflow-hidden">
+                              <div className="h-2.5 w-full rounded-full bg-white/[0.07] overflow-hidden">
                                 <motion.div
                                   className={`h-full rounded-full ${cfg.bar}`}
                                   initial={{ width: 0 }}
@@ -535,7 +540,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                         })}
                       </div>
                     ) : (
-                      <div className="text-sm text-black/60">Score breakdown non disponible (produits V1).</div>
+                      <div className="text-sm text-white/50">Score breakdown non disponible (produits V1).</div>
                     )}
                   </Box>
                 )}
@@ -545,18 +550,18 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-            <div className="text-sm font-semibold text-black/80">🎓 Formation e-commerce</div>
-            <div className="mt-1 text-sm text-black/60">Apprends la méthode complète pour lancer et scaler proprement.</div>
-            <a href="https://www.chemindubusiness.fr/" className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90">
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5 backdrop-blur">
+            <div className="text-sm font-semibold text-white/80">🎓 Formation e-commerce</div>
+            <div className="mt-1 text-sm text-white/50">Apprends la méthode complète pour lancer et scaler proprement.</div>
+            <a href="https://www.chemindubusiness.fr/" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
               <span>Voir la formation</span>
               <CPFBadge />
             </a>
           </div>
-          <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-            <div className="text-sm font-semibold text-black/80">🎬 App CDB Video IA</div>
-            <div className="mt-1 text-sm text-black/60">Crée des vidéos ads vite pour tester tes produits.</div>
-            <a href="https://cdbvideoia.com/" className="mt-4 inline-flex rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90">
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5 backdrop-blur">
+            <div className="text-sm font-semibold text-white/80">🎬 App CDB Video IA</div>
+            <div className="mt-1 text-sm text-white/50">Crée des vidéos ads vite pour tester tes produits.</div>
+            <a href="https://cdbvideoia.com/" className="mt-4 inline-flex rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 hover:bg-white/10">
               Accéder à CDB Video IA
             </a>
           </div>
@@ -610,21 +615,19 @@ export default function ProductPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f6f7fb] p-6">
-        <div className="mx-auto max-w-6xl rounded-3xl border border-black/10 bg-white/70 p-6">
-          Chargement…
-        </div>
+      <div className="min-h-screen bg-[#06060a] flex items-center justify-center">
+        <div className="text-white/40 text-sm animate-pulse">Chargement…</div>
       </div>
     );
   }
 
   if (!p) {
     return (
-      <div className="min-h-screen bg-[#f6f7fb] p-6">
-        <div className="mx-auto max-w-6xl rounded-3xl border border-black/10 bg-white/70 p-6">
-          <p className="text-sm text-black/70">Produit introuvable.</p>
+      <div className="min-h-screen bg-[#06060a] flex items-center justify-center p-6">
+        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-6 text-center">
+          <p className="text-sm text-white/60">Produit introuvable.</p>
           <Link
-            className="mt-4 inline-block rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white"
+            className="mt-4 inline-block rounded-xl bg-gradient-to-r from-violet-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white"
             href="/app"
           >
             Retour dashboard

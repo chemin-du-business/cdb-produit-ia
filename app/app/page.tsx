@@ -49,11 +49,11 @@ function Pill({ children }: { children: React.ReactNode }) {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-  "Émergent":    { label: "Émergent",    bg: "bg-violet-100",  text: "text-violet-700", dot: "bg-violet-500" },
-  "En tendance": { label: "En tendance", bg: "bg-orange-100",  text: "text-orange-700", dot: "bg-orange-500" },
-  "Populaire":   { label: "Populaire",   bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500" },
-  "En regain":   { label: "En regain",   bg: "bg-sky-100",     text: "text-sky-700",    dot: "bg-sky-500" },
-  "En déclin":   { label: "En déclin",   bg: "bg-red-100",     text: "text-red-600",    dot: "bg-red-500" },
+  "Émergent":    { label: "Émergent",    bg: "bg-violet-500/20 border border-violet-500/30",  text: "text-violet-300", dot: "bg-violet-400" },
+  "En tendance": { label: "En tendance", bg: "bg-orange-500/20 border border-orange-500/30",  text: "text-orange-300", dot: "bg-orange-400" },
+  "Populaire":   { label: "Populaire",   bg: "bg-emerald-500/20 border border-emerald-500/30", text: "text-emerald-300", dot: "bg-emerald-400" },
+  "En regain":   { label: "En regain",   bg: "bg-sky-500/20 border border-sky-500/30",     text: "text-sky-300",    dot: "bg-sky-400" },
+  "En déclin":   { label: "En déclin",   bg: "bg-red-500/20 border border-red-500/30",     text: "text-red-300",    dot: "bg-red-400" },
 };
 
 function StatusBadge({ status }: { status?: string }) {
@@ -93,16 +93,16 @@ function ScoreBreakdown({ breakdown }: { breakdown: Product["score_breakdown"] }
         const pct = Math.min(100, Math.round(((val as number) / max) * 100));
         return (
           <div key={key} className="flex items-center gap-2">
-            <div className="w-20 shrink-0 text-[10px] text-black/50 truncate">{cfg.label}</div>
-            <div className="flex-1 h-1.5 rounded-full bg-black/[0.07] overflow-hidden">
+            <div className="w-20 shrink-0 text-[10px] text-white/40 truncate">{cfg.label}</div>
+            <div className="flex-1 h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
               <motion.div
-                className={`h-full rounded-full ${cfg.bar}`}
+                className={`h-full rounded-full ${cfg.bar} opacity-80`}
                 initial={{ width: 0 }}
                 animate={{ width: `${pct}%` }}
                 transition={{ duration: 0.6, ease: "easeOut" }}
               />
             </div>
-            <div className="w-5 shrink-0 text-right text-[10px] font-semibold text-black/60">{val as number}</div>
+            <div className="w-5 shrink-0 text-right text-[10px] font-semibold text-white/50">{val as number}</div>
           </div>
         );
       })}
@@ -171,7 +171,7 @@ function RiskPill({
   type?: string;
 }) {
   return (
-    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] font-medium text-black/65">
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-white/50">
       <span
         className={["h-1.5 w-1.5 shrink-0 rounded-full", riskColor(level)].join(
           " "
@@ -193,9 +193,9 @@ function RiskBlock({ risks }: { risks?: RiskItem[] }) {
   const visibleRisks = risks.slice(0, 3);
 
   return (
-    <div className="mt-3 rounded-2xl border border-black/10 bg-black/[0.025] px-3 py-2.5">
+    <div className="mt-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
       <div className="flex items-start gap-2">
-        <span className="pt-1 text-[11px] font-semibold text-black/65">
+        <span className="pt-1 text-[11px] font-semibold text-white/40">
           Risques
         </span>
         <div className="min-w-0 flex-1 space-y-2">
@@ -604,142 +604,102 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f6f7fb] p-6">
-        <div className="mx-auto max-w-6xl rounded-3xl border border-black/10 bg-white/70 p-6">
-          Chargement…
-        </div>
+      <div className="min-h-screen bg-[#06060a] flex items-center justify-center">
+        <div className="text-white/40 text-sm animate-pulse">Chargement…</div>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] text-black">
-      <div className="pointer-events-none fixed inset-0">
-        <div className="absolute -top-48 left-1/2 h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-300/30 via-sky-300/30 to-fuchsia-300/30 blur-3xl" />
+    <main className="min-h-screen bg-[#06060a] text-white overflow-x-hidden">
+
+      {/* Glows */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-violet-600/15 blur-[120px]" />
+        <div className="absolute top-1/3 -right-40 h-[300px] w-[400px] rounded-full bg-orange-500/8 blur-[100px]" />
+        <div className="absolute bottom-0 -left-40 h-[300px] w-[400px] rounded-full bg-indigo-600/10 blur-[100px]" />
       </div>
 
-      <header className="relative mx-auto w-full max-w-6xl px-6 py-6">
-        <div className="relative flex items-start justify-between gap-4">
-          <div
-            className="flex cursor-pointer items-center gap-3"
-            onClick={() => router.push("/")}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/[0.03]">
-              <span className="text-sm font-semibold text-black">CDB</span>
+      {/* Header */}
+      <header className="relative z-10 border-b border-white/[0.06] bg-[#06060a]/80 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-4">
+          <div className="flex cursor-pointer items-center gap-2.5" onClick={() => router.push("/")}>
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-orange-500">
+              <span className="text-xs font-black text-white">CDB</span>
             </div>
-
-            <div className="leading-tight">
-              <div className="text-sm font-semibold tracking-tight text-black">
-                CDB Produit IA
-              </div>
-            </div>
+            <span className="text-sm font-semibold tracking-tight text-white">Produit IA</span>
           </div>
 
-          <div className="shrink-0">
+          <div className="flex items-center gap-2">
+            <a href="https://www.chemindubusiness.fr/" className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/10 sm:inline-flex">
+              Formation <CPFBadge />
+            </a>
             <button
               onClick={logout}
-              className="hidden rounded-2xl border border-black/10 bg-white/70 px-4 py-2 text-sm font-semibold text-black/80 hover:bg-white sm:inline-flex"
-            >
-              Déconnexion
-            </button>
-
-            <button
-              onClick={logout}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70 text-black/80 hover:bg-white sm:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
               aria-label="Déconnexion"
-              title="Déconnexion"
             >
               <LogoutIcon />
             </button>
           </div>
         </div>
-
-        <div className="mt-4 flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <a
-            href="https://www.chemindubusiness.fr/"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
-          >
-            <span>Découvrir la formation</span>
-            <CPFBadge />
-          </a>
-          <a
-            href="https://cdbvideoia.com/"
-            className="inline-flex items-center justify-center rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
-          >
-            Découvrir CDB Video IA
-          </a>
-        </div>
       </header>
 
-      <section className="relative mx-auto w-full max-w-6xl px-6 pb-16">
-        <div className="rounded-[32px] border border-black/10 bg-white/70 p-6 shadow-sm backdrop-blur">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-tight">
-                Dashboard — Top produits de la semaine
-              </h1>
-              <p className="mt-1 text-sm text-black/60">
-                Mise à jour :{" "}
-                <span className="font-semibold text-black/80">
-                  {currentRunDate}
-                </span>
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2" />
+      <section className="relative z-10 mx-auto w-full max-w-6xl px-5 py-8 pb-20">
+
+        {/* Title */}
+        <div className="mb-6">
+          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-300 mb-3">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-violet-400" />
+            </span>
+            Mise à jour {currentRunDate}
           </div>
+          <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+            Radar —{" "}
+            <span className="bg-gradient-to-r from-violet-400 to-orange-400 bg-clip-text text-transparent" style={{ WebkitBackgroundClip: "text" }}>
+              top produits
+            </span>{" "}
+            de la semaine
+          </h1>
+        </div>
 
-          {loadError && (
-            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-              Erreur Supabase : {loadError}
-            </div>
-          )}
+        {loadError && (
+          <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+            Erreur : {loadError}
+          </div>
+        )}
 
-          <div className="mt-6 grid gap-3 md:grid-cols-4">
+        {/* Filters */}
+        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 backdrop-blur mb-6">
+          <div className="grid gap-3 md:grid-cols-4">
             <div className="md:col-span-2">
-              <label className="text-xs font-semibold text-black/60">
-                Recherche
-              </label>
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Ex: brosse, cuisine, fitness…"
-                className="mt-1 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                placeholder="🔍  Rechercher un produit…"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30"
               />
             </div>
-
-            <div>
-              <label className="text-xs font-semibold text-black/60">
-                Catégorie
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none"
-              >
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c === "all" ? "Toutes" : c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-black/60">
-                Source
-              </label>
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none"
-              >
-                {sources.map((s) => (
-                  <option key={s} value={s}>
-                    {s === "all" ? "Toutes" : s}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/80 outline-none"
+            >
+              {categories.map((c) => (
+                <option key={c} value={c} className="bg-[#1a1a2e]">{c === "all" ? "Toutes catégories" : c}</option>
+              ))}
+            </select>
+            <select
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/80 outline-none"
+            >
+              {sources.map((s) => (
+                <option key={s} value={s} className="bg-[#1a1a2e]">{s === "all" ? "Toutes sources" : s}</option>
+              ))}
+            </select>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
@@ -751,10 +711,12 @@ export default function DashboardPage() {
                   key={s}
                   type="button"
                   onClick={() => setStatus(s)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                    active
-                      ? cfg ? `${cfg.bg} ${cfg.text} shadow-sm` : "bg-black text-white"
-                      : "bg-black/[0.04] text-black/55 hover:bg-black/[0.08]"
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+                    active && s === "all"
+                      ? "bg-white text-black"
+                      : active && cfg
+                      ? `${cfg.bg} ${cfg.text}`
+                      : "border border-white/10 bg-white/5 text-white/50 hover:bg-white/10"
                   }`}
                 >
                   {cfg && active && <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />}
@@ -762,22 +724,17 @@ export default function DashboardPage() {
                 </button>
               );
             })}
-          </div>
-
-          <div className="mt-4 flex items-center gap-3">
-            <div className="text-xs font-semibold text-black/60">
-              Score min
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-white/30">Score min</span>
+              <input
+                type="range" min={0} max={100} value={minScore}
+                onChange={(e) => setMinScore(Number(e.target.value))}
+                className="w-20 accent-violet-500"
+              />
+              <span className="text-xs font-semibold text-violet-400">{minScore}</span>
             </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={minScore}
-              onChange={(e) => setMinScore(Number(e.target.value))}
-              className="w-full"
-            />
-            <Pill>{minScore}</Pill>
           </div>
+        </div>
 
           <motion.div
             className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
@@ -796,13 +753,13 @@ export default function DashboardPage() {
                   }}
                   exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
                   whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="group overflow-hidden rounded-[32px] border border-black/10 bg-white/80 shadow-sm"
+                  className="group overflow-hidden rounded-[28px] border border-white/[0.08] bg-white/[0.04] backdrop-blur"
                 >
-                  <div className="relative aspect-[9/16] w-full bg-black/5">
+                  <div className="relative aspect-[9/16] w-full bg-black/20">
                     <MediaHero p={p} />
 
-                    <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
-                      {p.score}/100
+                    <div className="absolute right-3 top-3 rounded-xl bg-black/70 px-2.5 py-1.5 text-xs font-black text-white backdrop-blur border border-white/10">
+                      {p.score}<span className="text-white/40 font-normal">/100</span>
                     </div>
 
                     {p.status && (
@@ -812,15 +769,15 @@ export default function DashboardPage() {
                     )}
                   </div>
 
-                  <div className="p-5">
-                    <div className="text-xs font-semibold text-black/50">
+                  <div className="p-4">
+                    <div className="text-xs font-semibold text-violet-400/70 uppercase tracking-wider">
                       {p.category}
                     </div>
-                    <div className="mt-1 line-clamp-2 text-lg font-extrabold tracking-tight text-black/90">
+                    <div className="mt-1 line-clamp-2 text-base font-bold tracking-tight text-white/90">
                       {p.title}
                     </div>
 
-                    <p className="mt-3 line-clamp-2 text-sm text-black/60">
+                    <p className="mt-2 line-clamp-2 text-xs text-white/50">
                       {p.summary}
                     </p>
 
@@ -831,12 +788,12 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => router.push(`/app/product/${p.slug}`)}
-                      className="mt-4 inline-flex w-full items-center justify-center rounded-[28px] bg-black px-4 py-4 text-sm font-extrabold text-white hover:bg-black/90 active:scale-[0.98] transition-transform"
+                      className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 active:scale-[0.98] transition-all"
                     >
-                      Voir l’analyse complète
+                      Voir l’analyse complète →
                     </button>
 
-                    <div className="mt-3 text-xs text-black/45">
+                    <div className="mt-2 text-xs text-white/25">
                       {(p.sources ?? []).join(" · ")}
                     </div>
                   </div>
@@ -848,64 +805,53 @@ export default function DashboardPage() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="rounded-3xl border border-black/10 bg-white/70 p-6 text-sm text-black/60"
+                className="col-span-full rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 text-sm text-white/40"
               >
                 Aucun produit avec ces filtres.
               </motion.div>
             )}
           </motion.div>
 
-          <div className="mt-10 rounded-[28px] border border-black/10 bg-white/60 p-4 sm:p-5">
+          <div className="mt-10 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="min-w-0">
-                <div className="text-lg font-extrabold tracking-tight sm:text-xl">
+                <div className="text-lg font-bold tracking-tight text-white/80 sm:text-xl">
                   Semaine précédente
                 </div>
-                <div className="text-sm text-black/60">
-                  <span className="font-semibold text-black/80">
-                    {lastRunDate}
-                  </span>
-                </div>
+                <div className="text-sm text-white/40">{lastRunDate}</div>
               </div>
-
-              <div className="w-full sm:w-auto">
-                <Pill>{lastWeekProducts.length} produits</Pill>
-              </div>
+              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/50">
+                {lastWeekProducts.length} produits
+              </span>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {lastWeekProducts.map((p, idx) => (
                 <div
                   key={p.id}
-                  className="rounded-2xl border border-black/10 bg-white px-3 py-3 hover:bg-white sm:px-4"
+                  className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3 hover:bg-white/[0.06] transition-colors sm:px-4"
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0 flex-1">
-                      <div className="text-base font-semibold leading-snug text-black/85 sm:text-sm">
-                        <span className="mr-1">{idx + 1}.</span>
-                        <span className="line-clamp-2 break-words">
-                          {p.title}
-                        </span>
+                      <div className="text-base font-semibold leading-snug text-white/80 sm:text-sm">
+                        <span className="mr-1 text-white/30">{idx + 1}.</span>
+                        <span className="line-clamp-2 break-words">{p.title}</span>
                       </div>
-
-                      <div className="mt-1 line-clamp-2 break-words text-xs text-black/55">
+                      <div className="mt-1 line-clamp-2 break-words text-xs text-white/35">
                         {p.category} • {(p.sources ?? []).join(", ")}
                       </div>
                     </div>
 
                     <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
-                      <div className="shrink-0 rounded-2xl bg-black px-3 py-1.5 text-xs font-extrabold text-white">
+                      <div className="shrink-0 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white/70">
                         {p.score}
                       </div>
-
                       <button
                         type="button"
                         onClick={() => router.push(`/app/product/${p.slug}`)}
-                        className="min-w-0 flex-1 rounded-2xl border border-black/10 bg-white px-3 py-2 text-xs font-extrabold text-black/80 hover:bg-white sm:flex-none"
+                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/60 hover:bg-white/10 sm:flex-none"
                       >
-                        <span className="block truncate sm:truncate-none">
-                          En savoir plus
-                        </span>
+                        <span className="block truncate sm:truncate-none">En savoir plus</span>
                       </button>
                     </div>
                   </div>
@@ -913,13 +859,12 @@ export default function DashboardPage() {
               ))}
 
               {lastWeekProducts.length === 0 && (
-                <div className="rounded-3xl border border-black/10 bg-white/70 p-6 text-sm text-black/60">
+                <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 text-sm text-white/40">
                   Aucun produit de la semaine précédente.
                 </div>
               )}
             </div>
           </div>
-        </div>
       </section>
     </main>
   );
