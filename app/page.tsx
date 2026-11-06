@@ -117,11 +117,11 @@ export default async function HomePage() {
               Score IA, analyse marketing complète, radar mis à jour chaque semaine.
             </p>
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
-              <Link href="/login" className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-7 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(139,92,246,0.6)] hover:brightness-110 transition">
+            <div className="mt-7 flex flex-wrap justify-center gap-3 lg:justify-start">
+              <Link href="/login" className="inline-flex h-11 items-center rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-6 text-sm font-semibold text-white shadow-[0_10px_24px_-8px_rgba(139,92,246,0.6)] hover:brightness-110 transition">
                 Accéder gratuitement →
               </Link>
-              <a href="#demo" className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-7 text-sm font-semibold text-white/70 hover:bg-white/10 transition">
+              <a href="#demo" className="inline-flex h-11 items-center rounded-full border border-white/15 bg-white/5 px-6 text-sm font-semibold text-white/70 hover:bg-white/10 transition">
                 Voir la démo
               </a>
             </div>
@@ -351,7 +351,7 @@ export default async function HomePage() {
                   Radar hebdomadaire, analyses IA complètes, sources vérifiées. Zéro carte bancaire.
                 </p>
               </div>
-              <Link href="/login" className="inline-flex h-12 w-full items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-7 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(139,92,246,0.6)] hover:brightness-110 transition md:w-auto md:shrink-0">
+              <Link href="/login" className="inline-flex h-11 items-center rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-6 text-sm font-semibold text-white shadow-[0_10px_24px_-8px_rgba(139,92,246,0.6)] hover:brightness-110 transition shrink-0">
                 Créer mon compte gratuit →
               </Link>
             </div>

@@ -153,7 +153,7 @@ export default function ProductCardDemo({ product }: { product: Product }) {
           <a href="/login" className="inline-flex h-11 w-full items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-orange-500 text-sm font-semibold text-white hover:brightness-110 transition">
             Voir l&apos;analyse complète →
           </a>
-          <a href="/login" className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 text-sm font-semibold text-white/60 hover:bg-white/10 transition">
+          <a href="/login" className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-sm font-semibold text-white/60 hover:bg-white/10 transition">
             Accéder gratuitement
           </a>
         </div>
