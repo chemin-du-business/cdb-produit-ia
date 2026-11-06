@@ -83,7 +83,7 @@ const V2_SOURCES = ["tiktok", "amazon", "google_trends", "google_shopping", "met
 
 function ScoreBreakdown({ breakdown }: { breakdown: Product["score_breakdown"] }) {
   if (!breakdown) return null;
-  const entries = Object.entries(breakdown).filter(([k, v]) => V2_SOURCES.includes(k) && v !== undefined && v !== null);
+  const entries = Object.entries(breakdown).filter(([k, v]) => V2_SOURCES.includes(k) && (v as number) > 0);
   if (!entries.length) return null;
   return (
     <div className="mt-3 space-y-1.5">
@@ -782,8 +782,6 @@ export default function DashboardPage() {
                     </p>
 
                     <ScoreBreakdown breakdown={p.score_breakdown} />
-
-                    <RiskBlock risks={p.analysis?.risks} />
 
                     <button
                       type="button"

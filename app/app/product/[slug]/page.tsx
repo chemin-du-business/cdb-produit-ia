@@ -813,7 +813,6 @@ export default function ProductPage() {
   const TABS = [
     { id: "analyse",  label: "Analyse" },
     { id: "hooks",    label: "Hooks & UGC" },
-    { id: "risques",  label: "Risques" },
     { id: "scores",   label: "Scores" },
   ] as const;
 
