@@ -25,13 +25,14 @@ TOP_N = int(os.environ.get("TOP_N", "20"))
 REGION = os.environ.get("RUN_REGION", "FR")
 
 # Mots-clés de découverte — catégories populaires dropshipping FR
+# 6 mots-clés max pour limiter la conso SerpApi en discovery
 DISCOVERY_KEYWORDS = [
-    "gadget cuisine", "accessoire maison tendance", "organisation rangement",
-    "beauté soin visage", "fitness maison", "accessoire smartphone",
-    "lampe design", "jouet enfant original", "animal compagnie accessoire",
-    "mode femme tendance", "sac à main", "bijoux tendance",
-    "outil jardinage", "nettoyage maison", "bien-être relaxation",
-    "accessoire voiture", "bureau home office", "chargeur sans fil",
+    "gadget cuisine tendance",
+    "beauté soin visage",
+    "accessoire maison viral",
+    "fitness gadget maison",
+    "accessoire smartphone tendance",
+    "organisation rangement",
 ]
 
 
@@ -201,7 +202,7 @@ def main() -> None:
         c["_discovery_score"] = min(tshop_sales / 100, 50) + min(amz_reviews / 50, 30) + (20 if is_badge else 0)
 
     sellable.sort(key=lambda x: x.get("_discovery_score", 0), reverse=True)
-    candidates_to_enrich = sellable[:40]
+    candidates_to_enrich = sellable[:15]
 
     # ── Étape 4 : Enrichissement SerpApi complet ─────────────────────────────
     print(f"🔍 Enrichissement SerpApi de {len(candidates_to_enrich)} candidats...")
