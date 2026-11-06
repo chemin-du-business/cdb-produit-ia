@@ -120,12 +120,14 @@ function ProductMedia({
   imageUrl,
   sourceUrl,
   videoStorageUrl,
+  youtubeUrl,
   score,
 }: {
   title: string;
   imageUrl: string | null;
   sourceUrl: string | null;
   videoStorageUrl: string | null;
+  youtubeUrl?: string | null;
   score: number;
 }) {
   const [muted, setMuted] = useState(true);
@@ -166,12 +168,14 @@ function ProductMedia({
     };
   }, [muted, videoStorageUrl, videoError]);
 
+  // YouTube URL : depuis source_url ou depuis youtubeUrl prop
+  const effectiveVideoUrl = isYouTubeUrl(sourceUrl) ? sourceUrl : (youtubeUrl ?? null);
   const tiktokId = extractTikTokVideoId(sourceUrl);
-  const youtubeId = extractYouTubeVideoId(sourceUrl);
+  const youtubeId = extractYouTubeVideoId(effectiveVideoUrl ?? sourceUrl);
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-white/[0.07] bg-black/5">
-      <div className={`relative w-full bg-black ${isYouTubeUrl(sourceUrl) ? "aspect-video" : "aspect-[9/16]"}`}>
+      <div className={`relative w-full bg-black ${effectiveVideoUrl && isYouTubeUrl(effectiveVideoUrl) ? "aspect-video" : "aspect-[9/16]"}`}>
         {videoStorageUrl && !videoError ? (
           <video
             ref={videoRef}
@@ -190,7 +194,7 @@ function ProductMedia({
           >
             <source src={videoStorageUrl} type="video/mp4" />
           </video>
-        ) : isYouTubeUrl(sourceUrl) && youtubeId ? (
+        ) : (isYouTubeUrl(effectiveVideoUrl ?? "") || isYouTubeUrl(sourceUrl)) && youtubeId ? (
           <iframe
             src={`https://www.youtube.com/embed/${youtubeId}?rel=0&modestbranding=1`}
             className="h-full w-full"
@@ -469,6 +473,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                   imageUrl={p.image_url}
                   sourceUrl={p.source_url}
                   videoStorageUrl={p.video_storage_url}
+                  youtubeUrl={p.signals?.youtube_url ?? null}
                   score={p.score}
                 />
               </div>

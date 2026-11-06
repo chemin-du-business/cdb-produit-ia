@@ -232,7 +232,7 @@ def main() -> None:
         # Conserver l'image/source_url récupérée pendant l'enrichissement
         c["_image_url"] = serpapi_signals.pop("image_url", None)
         c["_source_url"] = serpapi_signals.pop("source_url", None)
-        c["_youtube_url"] = serpapi_signals.pop("youtube_url", None)
+        # youtube_url reste dans signals pour affichage sur la page produit
         c["signals"].update(serpapi_signals)
 
     # ── Étape 5 : Score V2 multi-sources ────────────────────────────────────
