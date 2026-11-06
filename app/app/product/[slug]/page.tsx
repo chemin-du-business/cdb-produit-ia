@@ -302,18 +302,33 @@ function GoogleTrendsCard({ gt }: { gt: Record<string, any> }) {
   const rising = (gt.rising_queries ?? []) as Array<{ query: string } | string>;
   const timeline: Array<{ date: string; value: number }> = gt.timeline ?? [];
 
-  const W = 320, H = 72, PAD = 4;
+  const W = 320, H = 72, PAD_X = 4, PAD_Y = 4;
   const vals = timeline.map((p) => p.value);
   const maxV = Math.max(...vals, 1);
   const points = vals.length >= 2
     ? vals.map((v, i) => {
-        const x = PAD + (i / (vals.length - 1)) * (W - PAD * 2);
-        const y = H - PAD - ((v / maxV) * (H - PAD * 2));
+        const x = PAD_X + (i / (vals.length - 1)) * (W - PAD_X * 2);
+        const y = H - PAD_Y - ((v / maxV) * (H - PAD_Y * 2));
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       }).join(" ")
     : null;
 
   const dirColor = dir === "rising" ? "#34d399" : dir === "declining" ? "#f87171" : "#60a5fa";
+
+  // Labels de dates : premier, milieu, dernier
+  const dateLabels: { x: number; label: string }[] = [];
+  if (timeline.length >= 2) {
+    const fmt = (d: string) => {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return d.slice(0, 7);
+      return dt.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
+    };
+    const indices = [0, Math.floor((timeline.length - 1) / 2), timeline.length - 1];
+    indices.forEach((i) => {
+      const x = PAD_X + (i / (timeline.length - 1)) * (W - PAD_X * 2);
+      dateLabels.push({ x, label: fmt(timeline[i].date) });
+    });
+  }
 
   return (
     <Box>
@@ -326,7 +341,7 @@ function GoogleTrendsCard({ gt }: { gt: Record<string, any> }) {
 
       {points ? (
         <div className="rounded-xl overflow-hidden bg-white/[0.03] border border-white/[0.05]">
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+          <svg viewBox={`0 0 ${W} ${H + 14}`} className="w-full" preserveAspectRatio="none">
             <defs>
               <linearGradient id="tg-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={dirColor} stopOpacity="0.25" />
@@ -334,7 +349,7 @@ function GoogleTrendsCard({ gt }: { gt: Record<string, any> }) {
               </linearGradient>
             </defs>
             <polygon
-              points={`${PAD},${H} ${points} ${W - PAD},${H}`}
+              points={`${PAD_X},${H} ${points} ${W - PAD_X},${H}`}
               fill="url(#tg-fill)"
             />
             <polyline
@@ -345,6 +360,19 @@ function GoogleTrendsCard({ gt }: { gt: Record<string, any> }) {
               strokeLinejoin="round"
               strokeLinecap="round"
             />
+            {dateLabels.map(({ x, label }, i) => (
+              <text
+                key={i}
+                x={x}
+                y={H + 11}
+                textAnchor={i === 0 ? "start" : i === dateLabels.length - 1 ? "end" : "middle"}
+                fontSize="8"
+                fill="rgba(255,255,255,0.3)"
+                fontFamily="sans-serif"
+              >
+                {label}
+              </text>
+            ))}
           </svg>
         </div>
       ) : (
