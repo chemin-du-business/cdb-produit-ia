@@ -21,6 +21,7 @@ def fetch_meta_ads(
             params={
                 "q": query,
                 "country": country,
+                "ad_type": "ALL",
                 "ad_active_status": "ACTIVE",
             },
         )

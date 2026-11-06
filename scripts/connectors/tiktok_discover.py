@@ -15,7 +15,7 @@ def fetch_tiktok_trending(
     Retourne les posts avec vues, likes et signaux viraux.
     """
     try:
-        params: Dict[str, Any] = {"max_results": max_results}
+        params: Dict[str, Any] = {"num": max_results}
         if query:
             params["q"] = query
 

@@ -27,6 +27,12 @@ TOP_N = int(os.environ.get("TOP_N", "20"))
 REGION = os.environ.get("RUN_REGION", "FR")
 
 
+def _short_keyword(title: str, max_words: int = 4) -> str:
+    """Réduit un titre produit à max_words mots pour Google Trends (trop long = no results)."""
+    words = title.strip().split()
+    return " ".join(words[:max_words])
+
+
 def enrich_with_serpapi(title: str, geo: str = "FR") -> Dict:
     """
     Lance les 5 connecteurs SerpApi en séquentiel pour un produit.
@@ -34,8 +40,8 @@ def enrich_with_serpapi(title: str, geo: str = "FR") -> Dict:
     """
     signals: Dict = {}
 
-    # Google Trends
-    trends_results = fetch_google_trends([title], geo=geo)
+    # Google Trends — keyword court (max 4 mots) pour éviter "no results"
+    trends_results = fetch_google_trends([_short_keyword(title)], geo=geo)
     if trends_results:
         t = trends_results[0]
         signals["google_trends"] = {
