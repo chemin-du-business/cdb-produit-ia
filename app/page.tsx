@@ -77,10 +77,10 @@ export default async function HomePage() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <Link href="/login" className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 hover:bg-white/10 sm:inline-flex">
+            <Link href="/login" className="hidden h-9 items-center rounded-full border border-white/15 px-4 text-sm font-medium text-white/70 hover:bg-white/10 transition sm:inline-flex">
               Connexion
             </Link>
-            <Link href="/login" className="inline-flex rounded-xl bg-gradient-to-r from-violet-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_8px_30px_-8px_rgba(139,92,246,0.5)] hover:brightness-110">
+            <Link href="/login" className="inline-flex h-9 items-center rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-5 text-sm font-semibold text-white shadow-[0_8px_24px_-8px_rgba(139,92,246,0.6)] hover:brightness-110 transition">
               Démarrer gratuitement
             </Link>
           </div>
@@ -88,13 +88,13 @@ export default async function HomePage() {
       </header>
 
       {/* ── HERO ── */}
-      <section className="relative z-10 mx-auto max-w-6xl px-5 pb-16 pt-32 sm:pt-40">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      <section className="relative z-10 mx-auto max-w-6xl px-4 pb-12 pt-28 sm:px-5 sm:pt-40">
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
 
           {/* Left */}
-          <div>
+          <div className="text-center lg:text-left">
             {/* Badge */}
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-300">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-300">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-400" />
@@ -102,7 +102,7 @@ export default async function HomePage() {
               Radar mis à jour chaque lundi
             </div>
 
-            <h1 className="text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="text-3xl font-black leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
               Trouve les{" "}
               <span
                 className="bg-gradient-to-r from-violet-400 via-fuchsia-300 to-orange-400 bg-clip-text text-transparent"
@@ -110,47 +110,45 @@ export default async function HomePage() {
               >
                 produits à vendre
               </span>{" "}
-              <br className="hidden sm:block" />
               avant tout le monde.
             </h1>
 
-            <p className="mt-5 max-w-sm text-base leading-relaxed text-white/50">
+            <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed text-white/50 lg:mx-0">
               Score IA, analyse marketing complète, radar mis à jour chaque semaine.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/login" className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-orange-500 px-6 py-3.5 text-sm font-bold text-white shadow-[0_15px_40px_-10px_rgba(139,92,246,0.5)] hover:brightness-110 transition">
-                Accéder gratuitement
-                <span>→</span>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
+              <Link href="/login" className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-7 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(139,92,246,0.6)] hover:brightness-110 transition">
+                Accéder gratuitement →
               </Link>
-              <a href="#demo" className="inline-flex items-center rounded-2xl border border-white/10 bg-white/5 px-6 py-3.5 text-sm font-semibold text-white/70 hover:bg-white/10 transition">
+              <a href="#demo" className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-7 text-sm font-semibold text-white/70 hover:bg-white/10 transition">
                 Voir la démo
               </a>
             </div>
 
           </div>
 
-          {/* Right: orbit */}
-          <div className="flex justify-center lg:justify-end">
+          {/* Right: orbit — masqué sur mobile */}
+          <div className="hidden lg:flex lg:justify-end">
             <HeroOrbit />
           </div>
         </div>
       </section>
 
       {/* ── DEMO PRODUCTS ── */}
-      <section id="demo" className="relative z-10 mx-auto max-w-6xl px-5 pb-20">
-        <div className="mb-8 flex items-end justify-between">
+      <section id="demo" className="relative z-10 mx-auto max-w-6xl px-4 pb-16 sm:px-5 sm:pb-20">
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Produits de la semaine</h2>
-            <p className="mt-1 text-sm text-white/40">Aperçu public — analyse complète après connexion.</p>
+            <h2 className="text-xl font-black tracking-tight sm:text-3xl">Produits de la semaine</h2>
+            <p className="mt-1 text-xs text-white/40 sm:text-sm">Aperçu public — analyse complète après connexion.</p>
           </div>
-          <Link href="/login" className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 hover:bg-white/10 sm:inline-flex">
+          <Link href="/login" className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/10 sm:px-4 sm:py-2 sm:text-sm">
             Tout voir →
           </Link>
         </div>
 
         {(products ?? []).length > 0 ? (
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {(products ?? []).map((p) => (
               <ProductCardDemo key={p.id} product={p} />
             ))}
@@ -163,29 +161,29 @@ export default async function HomePage() {
       </section>
 
       {/* ── STATS BAND ── */}
-      <section className="relative z-10 mx-auto max-w-6xl px-5 pb-16">
+      <section className="relative z-10 mx-auto max-w-6xl px-4 pb-12 sm:px-5 sm:pb-16">
         <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.07]">
           {[
             { n: "100%", label: "Gratuit" },
-            { n: "6", label: "Sources d'IA" },
-            { n: "8", label: "Produits / semaine" },
+            { n: "6", label: "Sources IA" },
+            { n: "8", label: "Produits/sem." },
           ].map((s) => (
-            <div key={s.label} className="flex flex-col items-center justify-center bg-[#06060a] py-7">
-              <div className="bg-gradient-to-r from-violet-400 to-orange-400 bg-clip-text text-2xl font-black text-transparent sm:text-3xl">
+            <div key={s.label} className="flex flex-col items-center justify-center bg-[#06060a] py-5 sm:py-7">
+              <div className="bg-gradient-to-r from-violet-400 to-orange-400 bg-clip-text text-xl font-black text-transparent sm:text-3xl">
                 {s.n}
               </div>
-              <div className="mt-1 text-xs font-medium text-white/40">{s.label}</div>
+              <div className="mt-1 text-[10px] font-medium text-white/40 sm:text-xs">{s.label}</div>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── HOW IT WORKS ── */}
-      <section className="relative z-10 mx-auto max-w-6xl px-5 pb-20">
-        <div className="mb-10 text-center">
-          <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Comment ça marche</h2>
+      <section className="relative z-10 mx-auto max-w-6xl px-4 pb-14 sm:px-5 sm:pb-20">
+        <div className="mb-7 text-center sm:mb-10">
+          <h2 className="text-xl font-black tracking-tight sm:text-3xl">Comment ça marche</h2>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-3">
           {[
             { n: "01", title: "Détecte", desc: "Scan IA de 6 plateformes chaque lundi", icon: "🔎", glow: "rgba(139,92,246,0.15)", border: "rgba(139,92,246,0.3)" },
             { n: "02", title: "Score", desc: "Score /100 : viralité, pubs, marché", icon: "⚡", glow: "rgba(249,115,22,0.15)", border: "rgba(249,115,22,0.3)" },
@@ -193,26 +191,26 @@ export default async function HomePage() {
           ].map((s) => (
             <div
               key={s.n}
-              className="relative overflow-hidden rounded-2xl p-6 backdrop-blur transition"
+              className="relative flex items-center gap-4 overflow-hidden rounded-2xl p-4 backdrop-blur transition md:block md:p-6"
               style={{ background: `linear-gradient(135deg, ${s.glow} 0%, rgba(6,6,10,0.8) 60%)`, border: `1px solid ${s.border}`, boxShadow: `0 0 30px ${s.glow}` }}
             >
-              <div className="mb-5 flex items-center justify-between">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-2xl backdrop-blur">
-                  {s.icon}
-                </div>
-                <span className="font-mono text-3xl font-black text-white/[0.07]">{s.n}</span>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-xl backdrop-blur md:mb-5 md:h-12 md:w-12 md:text-2xl">
+                {s.icon}
               </div>
-              <h3 className="text-lg font-black text-white">{s.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-white/55">{s.desc}</p>
+              <div>
+                <h3 className="text-base font-black text-white md:text-lg">{s.title}</h3>
+                <p className="mt-0.5 text-xs leading-relaxed text-white/55 sm:text-sm md:mt-2">{s.desc}</p>
+              </div>
+              <span className="absolute right-4 top-3 font-mono text-2xl font-black text-white/[0.06] md:static md:hidden">{s.n}</span>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── SOURCE SECTIONS ── */}
-      <section className="relative z-10 mx-auto max-w-6xl px-5 pb-24">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-black tracking-tight sm:text-4xl">On analyse partout pour toi</h2>
+      <section className="relative z-10 mx-auto max-w-6xl px-4 pb-16 sm:px-5 sm:pb-24">
+        <div className="mb-8 text-center sm:mb-12">
+          <h2 className="text-xl font-black tracking-tight sm:text-4xl">On analyse partout pour toi</h2>
         </div>
 
         {/* Bento grid */}
@@ -339,23 +337,22 @@ export default async function HomePage() {
       </section>
 
       {/* ── CTA FINAL ── */}
-      <section className="relative z-10 mx-auto max-w-6xl px-5 pb-24">
+      <section className="relative z-10 mx-auto max-w-6xl px-4 pb-16 sm:px-5 sm:pb-24">
         <div className="relative overflow-hidden rounded-3xl p-[1px]">
           <div className="absolute inset-0 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-orange-500 opacity-60" />
-          <div className="relative rounded-3xl bg-[#0d0d14] px-8 py-12 sm:px-14">
-            <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
+          <div className="relative rounded-3xl bg-[#0d0d14] px-6 py-10 sm:px-14 sm:py-12">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="mb-3 inline-flex rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-300">
                   100% gratuit pour commencer
                 </div>
-                <h3 className="text-3xl font-black tracking-tight sm:text-4xl">Commence maintenant.</h3>
+                <h3 className="text-2xl font-black tracking-tight sm:text-4xl">Commence maintenant.</h3>
                 <p className="mt-3 max-w-md text-sm leading-relaxed text-white/50">
                   Radar hebdomadaire, analyses IA complètes, sources vérifiées. Zéro carte bancaire.
                 </p>
               </div>
-              <Link href="/login" className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-orange-500 px-7 py-4 text-sm font-bold text-white shadow-[0_15px_40px_-10px_rgba(139,92,246,0.6)] hover:brightness-110 transition">
-                Créer mon compte gratuit
-                <span>→</span>
+              <Link href="/login" className="inline-flex h-12 w-full items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-7 text-sm font-semibold text-white shadow-[0_12px_30px_-10px_rgba(139,92,246,0.6)] hover:brightness-110 transition md:w-auto md:shrink-0">
+                Créer mon compte gratuit →
               </Link>
             </div>
           </div>
