@@ -819,9 +819,6 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-sm text-white/40">{lastRunDate}</div>
               </div>
-              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/50">
-                {lastWeekProducts.length} produits
-              </span>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">

@@ -20,7 +20,8 @@ type Product = {
   summary: string;
   image_url: string | null;
   video_storage_url?: string | null;
-  analysis?: { risks?: RiskItem[] } | null;
+  score_breakdown?: Record<string, number> | null;
+  signals?: Record<string, unknown> | null;
 };
 
 export default async function HomePage() {
@@ -38,7 +39,7 @@ export default async function HomePage() {
 
   const productsQuery = supabase
     .from("products")
-    .select("id,title,slug,category,score,tags,sources,summary,analysis,image_url,video_storage_url")
+    .select("id,title,slug,category,score,tags,sources,summary,score_breakdown,signals,image_url,video_storage_url")
     .eq("is_hidden", false)
     .order("score", { ascending: false })
     .limit(3);
@@ -136,13 +137,38 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* ── DEMO PRODUCTS ── */}
+      <section id="demo" className="relative z-10 mx-auto max-w-6xl px-5 pb-20">
+        <div className="mb-8 flex items-end justify-between">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Produits de la semaine</h2>
+            <p className="mt-1 text-sm text-white/40">Aperçu public — analyse complète après connexion.</p>
+          </div>
+          <Link href="/login" className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 hover:bg-white/10 sm:inline-flex">
+            Tout voir →
+          </Link>
+        </div>
+
+        {(products ?? []).length > 0 ? (
+          <div className="grid gap-4 lg:grid-cols-3">
+            {(products ?? []).map((p) => (
+              <ProductCardDemo key={p.id} product={p} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-8 text-center text-sm text-white/40">
+            Les produits de la semaine apparaîtront ici dès le prochain run.
+          </div>
+        )}
+      </section>
+
       {/* ── STATS BAND ── */}
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-16">
         <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.07]">
           {[
             { n: "100%", label: "Gratuit" },
             { n: "6", label: "Sources d'IA" },
-            { n: "20+", label: "Produits / semaine" },
+            { n: "8", label: "Produits / semaine" },
           ].map((s) => (
             <div key={s.label} className="flex flex-col items-center justify-center bg-[#06060a] py-7">
               <div className="bg-gradient-to-r from-violet-400 to-orange-400 bg-clip-text text-2xl font-black text-transparent sm:text-3xl">
@@ -181,31 +207,6 @@ export default async function HomePage() {
             </div>
           ))}
         </div>
-      </section>
-
-      {/* ── DEMO PRODUCTS ── */}
-      <section id="demo" className="relative z-10 mx-auto max-w-6xl px-5 pb-20">
-        <div className="mb-8 flex items-end justify-between">
-          <div>
-            <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Produits de la semaine</h2>
-            <p className="mt-1 text-sm text-white/40">Aperçu public — analyse complète après connexion.</p>
-          </div>
-          <Link href="/login" className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 hover:bg-white/10 sm:inline-flex">
-            Tout voir →
-          </Link>
-        </div>
-
-        {(products ?? []).length > 0 ? (
-          <div className="grid gap-4 lg:grid-cols-3">
-            {(products ?? []).map((p) => (
-              <ProductCardDemo key={p.id} product={p} />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-8 text-center text-sm text-white/40">
-            Les produits de la semaine apparaîtront ici dès le prochain run.
-          </div>
-        )}
       </section>
 
       {/* ── SOURCE SECTIONS ── */}
