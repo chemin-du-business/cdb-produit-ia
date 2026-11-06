@@ -25,48 +25,51 @@ def score_candidate_v2(
     """
     Score multi-sources 0..100.
 
-    Pondération :
-      - TikTok viral (hashtag + discover) : 40 pts
-      - Amazon (demande marché)            : 20 pts
-      - Google (trends + shopping)         : 20 pts
-      - Meta Ads (validation pub)          : 10 pts
-      - TikTok Shop (ventes réelles)       : 10 pts
+    Pondération (engines disponibles sur plan SerpApi de base) :
+      - Amazon (demande marché)            : 35 pts
+      - Google Trends (intérêt recherche)  : 30 pts
+      - Google Shopping (présence marché)  : 20 pts
+      - TikTok Shop (ventes réelles)       : 15 pts
+      - TikTok discover / Meta Ads         : bonus 0..10 si dispo
 
     Un candidat sans signal sur une source reçoit 0 sur cette source.
     """
     signals = candidate.get("signals", {}) or {}
 
-    # ── TikTok (40 pts) ─────────────────────────────────────────────────────
-    tiktok_score = _score_tiktok(signals, max_views, max_likes, max_shares)   # 0..40
-
-    # ── Amazon (20 pts) ─────────────────────────────────────────────────────
+    # ── Amazon (35 pts) ─────────────────────────────────────────────────────
     amz = signals.get("amazon") or {}
-    amazon_score = int(round(_clamp(amz.get("demand_score", 0) / 100.0) * 20))
+    amazon_score = int(round(_clamp(amz.get("demand_score", 0) / 100.0) * 35))
 
-    # ── Google (20 pts = Trends 10 + Shopping 10) ───────────────────────────
+    # ── Google Trends (30 pts) ──────────────────────────────────────────────
     trends = signals.get("google_trends") or {}
-    shopping = signals.get("google_shopping") or {}
-
-    trends_raw = trends.get("current_value", 0) or 0  # 0..100 (Google scale)
-    trends_direction_bonus = {"rising": 1.0, "stable": 0.7, "declining": 0.4, "unknown": 0.5}
+    trends_raw = trends.get("current_value", 0) or 0
+    trends_peak = trends.get("peak_value", 0) or 0
+    # Utilise peak comme référence relative — un produit à 40/100 sur son pic est fort
+    effective_value = trends_raw if trends_peak == 0 else min(100, int((trends_raw / max(trends_peak, 1)) * 100 * 0.7 + trends_raw * 0.3))
+    trends_direction_bonus = {"rising": 1.0, "stable": 0.85, "declining": 0.5, "unknown": 0.75}
     trends_direction = trends.get("trend_direction", "unknown")
-    trends_score = int(round(_clamp(trends_raw / 100.0) * trends_direction_bonus.get(trends_direction, 0.5) * 10))
+    trends_score = int(round(_clamp(effective_value / 100.0) * trends_direction_bonus.get(trends_direction, 0.75) * 30))
 
+    # ── Google Shopping (20 pts) ────────────────────────────────────────────
+    shopping = signals.get("google_shopping") or {}
     shop_raw = shopping.get("market_score", 0) or 0
-    shopping_score = int(round(_clamp(shop_raw / 100.0) * 10))
+    shopping_score = int(round(_clamp(shop_raw / 100.0) * 20))
 
-    google_score = trends_score + shopping_score   # 0..20
+    google_score = trends_score + shopping_score   # 0..50
 
-    # ── Meta Ads (10 pts) ───────────────────────────────────────────────────
-    meta = signals.get("meta_ads") or {}
-    meta_score = int(round(_clamp((meta.get("ad_validation_score", 0) or 0) / 100.0) * 10))
-
-    # ── TikTok Shop (10 pts) ────────────────────────────────────────────────
+    # ── TikTok Shop (15 pts) ────────────────────────────────────────────────
     tshop = signals.get("tiktok_shop") or {}
-    tshop_score = int(round(_clamp((tshop.get("shop_score", 0) or 0) / 100.0) * 10))
+    tshop_score = int(round(_clamp((tshop.get("shop_score", 0) or 0) / 100.0) * 15))
+
+    # ── TikTok Discover bonus (0..10 si dispo) ──────────────────────────────
+    tiktok_score = min(10, _score_tiktok(signals, max_views, max_likes, max_shares) // 4)
+
+    # ── Meta Ads bonus (0..5 si dispo) ──────────────────────────────────────
+    meta = signals.get("meta_ads") or {}
+    meta_score = int(round(_clamp((meta.get("ad_validation_score", 0) or 0) / 100.0) * 5))
 
     # ── Total ───────────────────────────────────────────────────────────────
-    total = tiktok_score + amazon_score + google_score + meta_score + tshop_score
+    total = amazon_score + google_score + tshop_score + tiktok_score + meta_score
     total = max(0, min(100, total))
 
     # Statut tendance basé sur le score + direction Google Trends
@@ -76,12 +79,12 @@ def score_candidate_v2(
         "score": total,
         "status": status,
         "score_breakdown": {
-            "tiktok": tiktok_score,
             "amazon": amazon_score,
             "google_trends": trends_score,
             "google_shopping": shopping_score,
-            "meta_ads": meta_score,
             "tiktok_shop": tshop_score,
+            "tiktok": tiktok_score,
+            "meta_ads": meta_score,
         },
     }
 

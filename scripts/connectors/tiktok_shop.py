@@ -69,10 +69,10 @@ def tiktok_shop_signal(products: List[Dict[str, Any]]) -> Dict[str, Any]:
     total_sales = sum(p.get("sales_count") or 0 for p in products)
     total_reviews = sum(p.get("reviews_count") or 0 for p in products)
 
-    # Score 0..100
-    sales_score = min(total_sales / 1000.0, 1.0) * 50   # 1000 ventes = max
-    review_score = min(total_reviews / 500.0, 1.0) * 30
-    volume_score = min(len(products) / 10.0, 1.0) * 20
+    # Score 0..100 — calibré dropshipping (ventes réelles TikTok Shop, produits récents)
+    sales_score = min(total_sales / 150.0, 1.0) * 55    # 150 ventes = max (était 1000)
+    review_score = min(total_reviews / 80.0, 1.0) * 25  # 80 avis = max (était 500)
+    volume_score = min(len(products) / 5.0, 1.0) * 20   # 5 résultats = max (était 10)
 
     shop_score = int(round(sales_score + review_score + volume_score))
 

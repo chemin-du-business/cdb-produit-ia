@@ -75,10 +75,10 @@ def amazon_product_demand_signal(products: List[Dict[str, Any]]) -> Dict[str, An
     has_bestseller = any("best seller" in (p.get("badge", "") or "").lower() for p in products)
     has_choice = any("choice" in (p.get("badge", "") or "").lower() for p in products)
 
-    # Score de demande 0..100
-    review_score = min(total_reviews / 500.0, 1.0) * 50  # 500 avis = max
+    # Score de demande 0..100 — calibré dropshipping (produits récents, peu d'avis)
+    review_score = min(total_reviews / 80.0, 1.0) * 50   # 80 avis = max (était 500)
     bestseller_bonus = 30 if has_bestseller else (15 if has_choice else 0)
-    count_bonus = min(len(products) / 10.0, 1.0) * 20
+    count_bonus = min(len(products) / 5.0, 1.0) * 20     # 5 résultats = max (était 10)
 
     demand_score = int(round(review_score + bestseller_bonus + count_bonus))
 

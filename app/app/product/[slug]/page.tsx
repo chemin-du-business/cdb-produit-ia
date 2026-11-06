@@ -22,6 +22,7 @@ type Product = {
   video_storage_url: string | null;
   analysis: any;
   score_breakdown: Record<string, number> | null;
+  signals?: Record<string, any> | null;
 };
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; dot: string }> = {
@@ -42,7 +43,7 @@ const SOURCE_COLORS: Record<string, { bar: string; label: string }> = {
 };
 
 const SOURCE_MAX: Record<string, number> = {
-  tiktok: 40, amazon: 20, google_trends: 10, google_shopping: 10, meta_ads: 10, tiktok_shop: 10,
+  amazon: 35, google_trends: 30, google_shopping: 20, tiktok_shop: 15, tiktok: 10, meta_ads: 5,
 };
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -96,12 +97,22 @@ function extractTikTokVideoId(url?: string | null) {
 
 function isTikTokUrl(url?: string | null) {
   if (!url) return false;
+  try { return new URL(url).hostname.includes("tiktok.com"); } catch { return false; }
+}
+
+function extractYouTubeVideoId(url?: string | null) {
+  if (!url) return null;
   try {
     const u = new URL(url);
-    return u.hostname.includes("tiktok.com");
-  } catch {
-    return false;
-  }
+    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
+    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+  } catch {}
+  return null;
+}
+
+function isYouTubeUrl(url?: string | null) {
+  if (!url) return false;
+  try { const h = new URL(url).hostname; return h.includes("youtube.com") || h.includes("youtu.be"); } catch { return false; }
 }
 
 function ProductMedia({
@@ -156,10 +167,11 @@ function ProductMedia({
   }, [muted, videoStorageUrl, videoError]);
 
   const tiktokId = extractTikTokVideoId(sourceUrl);
+  const youtubeId = extractYouTubeVideoId(sourceUrl);
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-white/[0.07] bg-black/5">
-      <div className="relative aspect-[9/16] w-full bg-black">
+      <div className={`relative w-full bg-black ${isYouTubeUrl(sourceUrl) ? "aspect-video" : "aspect-[9/16]"}`}>
         {videoStorageUrl && !videoError ? (
           <video
             ref={videoRef}
@@ -178,6 +190,14 @@ function ProductMedia({
           >
             <source src={videoStorageUrl} type="video/mp4" />
           </video>
+        ) : isYouTubeUrl(sourceUrl) && youtubeId ? (
+          <iframe
+            src={`https://www.youtube.com/embed/${youtubeId}?rel=0&modestbranding=1`}
+            className="h-full w-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            title={title}
+          />
         ) : isTikTokUrl(sourceUrl) && tiktokId ? (
           <iframe
             src={`https://www.tiktok.com/embed/v2/${tiktokId}`}
@@ -262,6 +282,134 @@ function RiskLevelBadge({ level }: { level: string }) {
   const map: Record<string, string> = { high: "bg-red-500", medium: "bg-orange-400", low: "bg-emerald-500" };
   return (
     <span className={`inline-block h-2 w-2 rounded-full mr-1.5 ${map[level?.toLowerCase()] ?? "bg-black/30"}`} />
+  );
+}
+
+function TrendArrow({ dir }: { dir: string }) {
+  if (dir === "up") return <span className="text-emerald-400">↑</span>;
+  if (dir === "down") return <span className="text-red-400">↓</span>;
+  return <span className="text-white/40">→</span>;
+}
+
+function GoogleTrendsCard({ gt }: { gt: Record<string, any> }) {
+  const current = gt.current_value ?? 0;
+  const peak = gt.peak_value ?? 0;
+  const dir = gt.trend_direction ?? "stable";
+  const rising = (gt.rising_queries ?? []) as Array<{ query: string } | string>;
+  const timeline: Array<{ date: string; value: number }> = gt.timeline ?? [];
+
+  const W = 320, H = 72, PAD = 4;
+  const vals = timeline.map((p) => p.value);
+  const maxV = Math.max(...vals, 1);
+  const points = vals.length >= 2
+    ? vals.map((v, i) => {
+        const x = PAD + (i / (vals.length - 1)) * (W - PAD * 2);
+        const y = H - PAD - ((v / maxV) * (H - PAD * 2));
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(" ")
+    : null;
+
+  const dirColor = dir === "rising" ? "#34d399" : dir === "declining" ? "#f87171" : "#60a5fa";
+
+  return (
+    <Box>
+      <div className="flex items-center justify-between mb-3">
+        <SectionTitle>Google Trends</SectionTitle>
+        <span className="text-sm font-semibold" style={{ color: dirColor }}>
+          <TrendArrow dir={dir} /> {current}<span className="text-white/30 text-xs"> / {peak} pic</span>
+        </span>
+      </div>
+
+      {points ? (
+        <div className="rounded-xl overflow-hidden bg-white/[0.03] border border-white/[0.05]">
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="tg-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={dirColor} stopOpacity="0.25" />
+                <stop offset="100%" stopColor={dirColor} stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+            <polygon
+              points={`${PAD},${H} ${points} ${W - PAD},${H}`}
+              fill="url(#tg-fill)"
+            />
+            <polyline
+              points={points}
+              fill="none"
+              stroke={dirColor}
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+      ) : (
+        <div className="h-2 w-full rounded-full bg-white/[0.07] overflow-hidden mb-1">
+          <div className="h-full rounded-full bg-blue-400" style={{ width: `${peak > 0 ? Math.round((current / peak) * 100) : 0}%` }} />
+        </div>
+      )}
+
+      {rising.length > 0 && (
+        <div className="mt-3">
+          <div className="text-xs text-white/40 mb-1.5">Requêtes en hausse</div>
+          <div className="flex flex-wrap gap-1.5">
+            {rising.map((q, i) => (
+              <span key={i} className="rounded-full border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 text-[11px] text-blue-300">
+                {typeof q === "string" ? q : q.query}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </Box>
+  );
+}
+
+function AmazonSignalCard({ amz }: { amz: Record<string, any> }) {
+  const avgPrice = amz.avg_price ?? amz.average_price;
+  const totalReviews = amz.total_reviews ?? amz.reviews_count;
+  const isBestseller = amz.has_bestseller ?? amz.has_bestseller_badge ?? false;
+  const hasChoice = amz.has_amazon_choice ?? false;
+  const topProducts: any[] = amz.top_products ?? [];
+
+  if (!avgPrice && !totalReviews && !isBestseller && topProducts.length === 0) return null;
+
+  return (
+    <Box>
+      <div className="flex items-center justify-between mb-3">
+        <SectionTitle>Demande Amazon</SectionTitle>
+        <div className="flex gap-1.5">
+          {isBestseller && <span className="rounded-full border border-orange-400/30 bg-orange-400/10 px-2 py-0.5 text-[11px] font-semibold text-orange-300">#1 Best Seller</span>}
+          {hasChoice && !isBestseller && <span className="rounded-full border border-blue-400/30 bg-blue-400/10 px-2 py-0.5 text-[11px] font-semibold text-blue-300">Amazon's Choice</span>}
+        </div>
+      </div>
+      <div className="flex gap-3 text-sm mb-3">
+        {avgPrice != null && (
+          <div className="flex-1 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
+            <div className="text-xs text-white/40 mb-0.5">Prix moyen</div>
+            <div className="font-bold text-white/90">{avgPrice}€</div>
+          </div>
+        )}
+        {totalReviews != null && (
+          <div className="flex-1 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
+            <div className="text-xs text-white/40 mb-0.5">Avis clients</div>
+            <div className="font-bold text-white/90">{Number(totalReviews).toLocaleString("fr-FR")}</div>
+          </div>
+        )}
+      </div>
+      {topProducts.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-white/40 mb-1">Top produits</div>
+          {topProducts.slice(0, 3).map((prod: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 text-xs text-white/60">
+              <span className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-orange-400/10 text-orange-300 font-bold text-[10px]">{i + 1}</span>
+              <span className="line-clamp-1 flex-1">{prod.title ?? "—"}</span>
+              {prod.price != null && <span className="shrink-0 text-white/40">{prod.price}€</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Box>
   );
 }
 
@@ -375,7 +523,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                   <>
                     <Box>
                       <SectionTitle>Positionnement</SectionTitle>
-                      <div className="mt-4 space-y-3 text-sm text-white/60">
+                      <div className="mt-3 space-y-2 text-sm text-white/60">
                         {[
                           ["Promesse", positioning.main_promise],
                           ["Cible", positioning.target_customer],
@@ -392,7 +540,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
 
                     <Box>
                       <SectionTitle>Recommandations</SectionTitle>
-                      <div className="mt-4 space-y-2 text-sm text-white/60">
+                      <div className="mt-3 space-y-2 text-sm text-white/60">
                         <div>
                           <span className="font-semibold text-white/80">Prix :</span>{" "}
                           {recos.price_range?.min ?? "—"} – {recos.price_range?.max ?? "—"} {recos.price_range?.currency ?? ""}
@@ -408,11 +556,15 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                       </div>
                     </Box>
 
+                    {p.signals?.amazon && Object.keys(p.signals.amazon).length > 0 && (
+                      <AmazonSignalCard amz={p.signals.amazon} />
+                    )}
+
                     <Box>
                       <SectionTitle>Confiance IA</SectionTitle>
-                      <div className="mt-4 flex items-center gap-4">
+                      <div className="mt-3 flex items-center gap-4">
                         <div className="text-3xl font-extrabold">{conf.score ?? "—"}</div>
-                        <ul className="mt-1 space-y-1 text-xs text-white/50">
+                        <ul className="space-y-1 text-xs text-white/50">
                           {(conf.reasons ?? []).map((x: string, i: number) => (
                             <li key={i} className="flex items-start gap-1.5">
                               <span className="mt-0.5 text-white/20">•</span>{x}
@@ -503,6 +655,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                 )}
 
                 {activeTab === "scores" && (
+                  <>
                   <Box>
                     <SectionTitle>Score par source</SectionTitle>
                     <div className="mt-2 mb-5 flex items-baseline gap-2">
@@ -543,6 +696,10 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                       <div className="text-sm text-white/50">Score breakdown non disponible (produits V1).</div>
                     )}
                   </Box>
+                  {p.signals?.google_trends && (p.signals.google_trends.current_value > 0 || p.signals.google_trends.peak_value > 0) && (
+                    <GoogleTrendsCard gt={p.signals.google_trends} />
+                  )}
+                  </>
                 )}
               </motion.div>
             </AnimatePresence>
@@ -592,7 +749,7 @@ export default function ProductPage() {
       const { data, error } = await supabase
         .from("products")
         .select(
-          "id,title,slug,category,score,status,tags,sources,summary,image_url,image_source,source_url,video_storage_url,analysis,score_breakdown"
+          "id,title,slug,category,score,status,tags,sources,summary,image_url,image_source,source_url,video_storage_url,analysis,score_breakdown,signals"
         )
         .eq("slug", slug)
         .single();

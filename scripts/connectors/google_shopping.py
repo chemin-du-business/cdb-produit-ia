@@ -81,11 +81,11 @@ def google_shopping_signal(products: List[Dict[str, Any]]) -> Dict[str, Any]:
     else:
         competition = "low"
 
-    # Score marché : présence = bon signal, trop de concurrence = signal mitigé
-    presence_score = min(len(products) / 10.0, 1.0) * 40
-    review_score = min(total_reviews / 1000.0, 1.0) * 40
-    # Pénalité légère si trop de concurrence
-    competition_factor = 0.7 if competition == "high" else (0.85 if competition == "medium" else 1.0)
+    # Score marché calibré dropshipping — présence = bon signal, pénalité concurrence allégée
+    presence_score = min(len(products) / 5.0, 1.0) * 55   # 5 résultats = max (était 10)
+    review_score = min(total_reviews / 150.0, 1.0) * 35   # 150 avis = max (était 1000)
+    # Pénalité concurrence réduite : beaucoup de vendeurs = marché validé en dropshipping
+    competition_factor = 0.85 if competition == "high" else (0.92 if competition == "medium" else 1.0)
     market_score = int(round((presence_score + review_score) * competition_factor))
 
     return {

@@ -165,7 +165,13 @@ BLOCK_PATTERNS = [
     r"\bfilm\b", r"\bsérie\b", r"\bacteur\b", r"\bactrice\b",
     r"\bconcert\b", r"\bfestival\b",
 ]
-BRAND_BLOCKLIST = ["iphone", "samsung", "ps5", "playstation", "xbox", "netflix", "disney", "tesla", "apple", "meta"]
+BRAND_BLOCKLIST = [
+    "iphone", "samsung", "ps5", "playstation", "xbox", "netflix", "disney", "tesla", "apple", "meta",
+    "loreal", "l'oreal", "garnier", "nivea", "dove", "olay", "neutrogena", "maybelline", "revlon",
+    "pantene", "oral-b", "gillette", "braun", "philips", "dyson", "rowenta", "tefal", "moulinex",
+    "nike", "adidas", "zara", "h&m", "shein", "amazon", "ebay", "aliexpress", "ikea", "leclerc",
+    "lidl", "aldi", "decathlon", "boulanger", "fnac", "darty", "carrefour",
+]
 
 _block_re = re.compile("|".join(BLOCK_PATTERNS), re.IGNORECASE)
 
@@ -705,10 +711,14 @@ def classify_sellability(term: str, geo: str = "FR") -> Dict[str, Any]:
         "term": term,
         "market": geo,
         "rules": [
-            "sellable=true seulement si c'est un produit e-commerce concret vendable (objet/accessoire).",
-            "sellable=false si actu, politique, sport, people, marque, événement, service ou trop vague.",
-            "score = vendabilité 0-100 (100 = très vendable, démontrable en vidéo, achat impulsif).",
-            "Sois strict. Si doute, sellable=false."
+            "sellable=true seulement si c'est un produit e-commerce générique concret vendable (objet/accessoire).",
+            "sellable=false si: marque connue (L'Oréal, Garnier, Nike, Samsung, Dyson, Philips, etc.), actu, politique, sport, people, événement, service ou trop vague.",
+            "sellable=false si le produit est un article de grande distribution ou de pharmacie vendu partout.",
+            "sellable=false si le prix typique dépasse 150€ (pas adapté au dropshipping impulsif).",
+            "Le produit doit être dropshippable : gadget, accessoire, décoration, outil maison, beauté générique, animal, jardin.",
+            "Prix idéal : entre 10€ et 80€ pour achat impulsif.",
+            "score = vendabilité 0-100 (100 = gadget viral démontrable en vidéo, achat impulsif, pas de marque).",
+            "Sois très strict sur les marques. Si le nom contient une marque connue, sellable=false."
         ],
     }
 

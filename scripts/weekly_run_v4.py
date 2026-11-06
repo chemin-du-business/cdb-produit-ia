@@ -14,11 +14,12 @@ from scripts.connectors.amazon_products import fetch_amazon_products, amazon_pro
 from scripts.connectors.google_trends import fetch_google_trends
 from scripts.connectors.google_shopping import fetch_google_shopping, google_shopping_signal
 from scripts.connectors.meta_ads import fetch_meta_ads, meta_ads_signal
+from scripts.connectors.youtube_videos import fetch_youtube_video, youtube_embed_url
 
 # Pipeline
 from scripts.pipeline.scoring_v2 import score_candidate_v2
 from scripts.pipeline.supabase_db import get_supabase, upsert_products
-from scripts.pipeline.ai import extract_product_name, is_sellable_product, generate_analysis
+from scripts.pipeline.ai import extract_product_name, is_sellable_product, generate_analysis, _ensure_french_title
 from scripts.weekly_run_v3 import infer_category, make_tags
 
 TOP_N = int(os.environ.get("TOP_N", "20"))
@@ -27,12 +28,12 @@ REGION = os.environ.get("RUN_REGION", "FR")
 # Mots-clés de découverte — catégories populaires dropshipping FR
 # 6 mots-clés max pour limiter la conso SerpApi en discovery
 DISCOVERY_KEYWORDS = [
-    "gadget cuisine tendance",
-    "beauté soin visage",
-    "accessoire maison viral",
-    "fitness gadget maison",
-    "accessoire smartphone tendance",
-    "organisation rangement",
+    "gadget cuisine viral pas cher",
+    "accessoire chien chat tendance",
+    "gadget voiture organisateur",
+    "lampe led chambre décoration",
+    "accessoire bébé enfant pratique",
+    "outil jardinage plantes maison",
 ]
 
 
@@ -127,11 +128,18 @@ def enrich_with_serpapi(title: str, geo: str = "FR") -> Dict:
             "peak_value": t.get("peak_value", 0),
             "trend_direction": t.get("trend_direction", "unknown"),
             "rising_queries": t.get("rising_queries", [])[:3],
+            "timeline": t.get("timeline", []),
         }
 
     # Amazon
     amz_products = fetch_amazon_products(title, geo=geo)
-    signals["amazon"] = amazon_product_demand_signal(amz_products)
+    amz_signal = amazon_product_demand_signal(amz_products)
+    # Traduire les titres des top produits en français
+    for prod in (amz_signal.get("top_products") or [])[:3]:
+        raw = prod.get("title", "")
+        if raw:
+            prod["title"] = _ensure_french_title(raw, geo=geo)
+    signals["amazon"] = amz_signal
     if amz_products:
         signals["image_url"] = amz_products[0].get("image") or None
         signals["source_url"] = amz_products[0].get("url") or None
@@ -152,13 +160,23 @@ def enrich_with_serpapi(title: str, geo: str = "FR") -> Dict:
     if not signals.get("image_url") and tshop_products:
         signals["image_url"] = tshop_products[0].get("thumbnail") or None
 
-    # TikTok Discover — signal viral principal (remplace Apify)
+    # TikTok Discover — tentative (retourne 400 si engine non dispo sur le plan)
     discover_posts = fetch_tiktok_trending(query=title)
-    signals["tiktok_discover"] = tiktok_discover_signal(discover_posts)
-    if not signals.get("source_url") and discover_posts:
-        signals["source_url"] = discover_posts[0].get("url") or None
-    if not signals.get("image_url") and discover_posts:
-        signals["image_url"] = discover_posts[0].get("thumbnail") or None
+    if discover_posts:
+        signals["tiktok_discover"] = tiktok_discover_signal(discover_posts)
+        if not signals.get("source_url"):
+            signals["source_url"] = discover_posts[0].get("url") or None
+        if not signals.get("image_url"):
+            signals["image_url"] = discover_posts[0].get("thumbnail") or None
+
+    # Image fallback : TikTok Shop thumbnail (souvent de bonne qualité)
+    if not signals.get("image_url") and tshop_products:
+        signals["image_url"] = tshop_products[0].get("thumbnail") or None
+
+    # YouTube — vidéo de démonstration produit (1 crédit SerpApi)
+    yt_url = fetch_youtube_video(title)
+    if yt_url:
+        signals["youtube_url"] = yt_url
 
     return signals
 
@@ -202,7 +220,7 @@ def main() -> None:
         c["_discovery_score"] = min(tshop_sales / 100, 50) + min(amz_reviews / 50, 30) + (20 if is_badge else 0)
 
     sellable.sort(key=lambda x: x.get("_discovery_score", 0), reverse=True)
-    candidates_to_enrich = sellable[:15]
+    candidates_to_enrich = sellable[:8]
 
     # ── Étape 4 : Enrichissement SerpApi complet ─────────────────────────────
     print(f"🔍 Enrichissement SerpApi de {len(candidates_to_enrich)} candidats...")
@@ -214,6 +232,7 @@ def main() -> None:
         # Conserver l'image/source_url récupérée pendant l'enrichissement
         c["_image_url"] = serpapi_signals.pop("image_url", None)
         c["_source_url"] = serpapi_signals.pop("source_url", None)
+        c["_youtube_url"] = serpapi_signals.pop("youtube_url", None)
         c["signals"].update(serpapi_signals)
 
     # ── Étape 5 : Score V2 multi-sources ────────────────────────────────────
@@ -263,7 +282,7 @@ def main() -> None:
             "analysis": analysis,
             "image_url": w.get("_image_url"),
             "image_source": None,
-            "source_url": w.get("_source_url"),
+            "source_url": w.get("_source_url") or w.get("_youtube_url"),
             "video_storage_url": None,
             "is_hidden": False,
         })
