@@ -20,6 +20,7 @@ def score_candidate_v2(
     max_views: int = 1,
     max_likes: int = 1,
     max_shares: int = 1,
+    **_kwargs: Any,
 ) -> Dict[str, Any]:
     """
     Score multi-sources 0..100.
@@ -85,33 +86,36 @@ def score_candidate_v2(
     }
 
 
-def _score_tiktok(signals: Dict, max_views: int, max_likes: int, max_shares: int) -> int:
-    """Score TikTok combiné hashtag + discover sur 40 pts."""
-    tk_hash = signals.get("tiktok_hashtag") or {}
+def _score_tiktok(signals: Dict, max_views: int = 1, max_likes: int = 1, max_shares: int = 1) -> int:
+    """Score TikTok sur 40 pts — basé sur tiktok_discover (SerpApi, sans Apify)."""
     tk_disc = signals.get("tiktok_discover") or {}
 
-    # Hashtag signals
-    views = int(tk_hash.get("views") or 0)
-    likes = int(tk_hash.get("likes") or 0)
-    shares = int(tk_hash.get("shares") or 0)
-    comments = int(tk_hash.get("comments") or 0)
+    # Signaux agrégés depuis le discover
+    total_views = int(tk_disc.get("total_views") or 0)
+    total_likes = int(tk_disc.get("total_likes") or 0)
+    total_shares = int(tk_disc.get("total_shares") or 0)
+    posts_count = int(tk_disc.get("posts_count") or 0)
+    avg_engagement = float(tk_disc.get("avg_engagement_rate") or 0)
+    viral_score = float(tk_disc.get("viral_score") or 0)
 
-    if views > 0:
-        eng_rate = (likes + comments + shares) / float(views)
-        share_rate = shares / float(views)
+    # Reach — vues relatives à la population de candidats
+    max_v = max(max_views, total_views, 1)
+    reach = _clamp(_log_norm(total_views, max_v)) * 15       # 0..15
+
+    # Engagement rate
+    engagement = _clamp(avg_engagement / 0.06) * 10          # 0..10
+
+    # Viralité — partages relatifs
+    if total_views > 0:
+        share_rate = total_shares / float(total_views)
     else:
-        eng_rate = 0.0
         share_rate = 0.0
+    virality = _clamp(share_rate / 0.008) * 8                # 0..8
 
-    reach = _clamp(_log_norm(views, max_views)) * 15        # 0..15
-    engagement = _clamp(eng_rate / 0.06) * 10               # 0..10
-    virality = _clamp(share_rate / 0.008) * 8               # 0..8
+    # Volume de posts trouvés (signe de tendance active)
+    volume_boost = _clamp(posts_count / 10.0) * 7            # 0..7
 
-    # Discover signal (boost)
-    discover_viral = tk_disc.get("viral_score", 0) or 0
-    discover_boost = _clamp(discover_viral / 100.0) * 7    # 0..7
-
-    tiktok_total = int(round(reach + engagement + virality + discover_boost))
+    tiktok_total = int(round(reach + engagement + virality + volume_boost))
     return max(0, min(40, tiktok_total))
 
 
