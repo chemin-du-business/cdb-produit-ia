@@ -127,22 +127,6 @@ export default async function HomePage() {
               </a>
             </div>
 
-            {/* Source pills */}
-            <div className="mt-10 flex flex-wrap items-center gap-2.5">
-              <span className="text-xs font-medium text-white/30">Sources IA :</span>
-              {[
-                { name: "TikTok", color: "from-[#010101] to-[#2d2d2d]", glow: "shadow-[0_0_12px_rgba(255,255,255,0.08)]" },
-                { name: "TikTok Shop", color: "from-[#EE1D52] to-[#c41542]", glow: "shadow-[0_0_12px_rgba(238,29,82,0.3)]" },
-                { name: "Amazon", color: "from-[#FF9900] to-[#e08800]", glow: "shadow-[0_0_12px_rgba(255,153,0,0.3)]" },
-                { name: "Meta Ads", color: "from-[#1877F2] to-[#1060cc]", glow: "shadow-[0_0_12px_rgba(24,119,242,0.3)]" },
-                { name: "Google", color: "from-[#1f1f1f] to-[#2d2d2d]", glow: "shadow-[0_0_12px_rgba(255,255,255,0.08)]" },
-                { name: "Trends", color: "from-emerald-600 to-emerald-800", glow: "shadow-[0_0_12px_rgba(16,185,129,0.3)]" },
-              ].map((s) => (
-                <span key={s.name} className={`inline-flex items-center rounded-xl bg-gradient-to-r ${s.color} ${s.glow} px-3 py-1.5 text-[11px] font-bold text-white`}>
-                  {s.name}
-                </span>
-              ))}
-            </div>
           </div>
 
           {/* Right: orbit */}
