@@ -43,6 +43,8 @@ function GoogleIcon() {
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"magic" | "password">("magic");
   const [msg, setMsg] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
@@ -72,12 +74,18 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setMsg("");
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
-    if (error) setMsg(error.message);
-    else setMsg("✅ Lien envoyé ! Vérifie ta boîte mail.");
+    if (mode === "password") {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setMsg(error.message);
+      else router.replace("/app");
+    } else {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: redirectTo },
+      });
+      if (error) setMsg(error.message);
+      else setMsg("✅ Lien envoyé ! Vérifie ta boîte mail.");
+    }
     setLoading(false);
   }
 
@@ -159,10 +167,12 @@ export default function LoginPage() {
               <div className="h-px flex-1 bg-black/10" />
             </div>
 
+            <div className="flex rounded-2xl border border-black/10 bg-black/[0.03] p-1 text-xs font-semibold">
+              <button type="button" onClick={() => setMode("magic")} className={`flex-1 rounded-xl py-2 transition-colors ${mode === "magic" ? "bg-white shadow-sm text-black" : "text-black/50"}`}>Lien magique</button>
+              <button type="button" onClick={() => setMode("password")} className={`flex-1 rounded-xl py-2 transition-colors ${mode === "password" ? "bg-white shadow-sm text-black" : "text-black/50"}`}>Email + mot de passe</button>
+            </div>
+
             <form onSubmit={loginMagic} className="space-y-3">
-              <label className="block text-xs font-semibold text-black/60">
-                Email (lien magique)
-              </label>
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -171,12 +181,22 @@ export default function LoginPage() {
                 placeholder="ton@email.com"
                 className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none ring-black/10 focus:ring-2"
               />
+              {mode === "password" && (
+                <input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type="password"
+                  required
+                  placeholder="Mot de passe"
+                  className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none ring-black/10 focus:ring-2"
+                />
+              )}
               <button
                 type="submit"
                 disabled={loading}
                 className="inline-flex w-full items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black/80 hover:bg-white/90 disabled:opacity-60"
               >
-                Recevoir un lien de connexion
+                {mode === "password" ? "Se connecter" : "Recevoir un lien de connexion"}
               </button>
             </form>
 
