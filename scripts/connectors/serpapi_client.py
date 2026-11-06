@@ -38,11 +38,17 @@ def serpapi_get(
     for attempt in range(retries):
         try:
             resp = requests.get(SERPAPI_BASE, params=full_params, timeout=_DEFAULT_TIMEOUT)
+            # 400 = erreur permanente (mauvais params ou engine non disponible sur ce plan)
+            # Inutile de retenter — on échoue immédiatement
+            if resp.status_code == 400:
+                raise RuntimeError(f"SerpApi {engine} 400 Bad Request (engine non disponible ou params invalides)")
             resp.raise_for_status()
             data = resp.json()
             if "error" in data:
                 raise ValueError(f"SerpApi error: {data['error']}")
             return data
+        except RuntimeError:
+            raise  # 400 : on ne retente pas
         except Exception as e:
             last_err = e
             if attempt < retries - 1:

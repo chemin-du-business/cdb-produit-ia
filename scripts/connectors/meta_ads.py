@@ -25,6 +25,12 @@ def fetch_meta_ads(
                 "ad_active_status": "ACTIVE",
             },
         )
+    except RuntimeError as e:
+        # 400 = engine non disponible sur ce plan SerpApi → on skip silencieusement
+        if "400" in str(e):
+            return []
+        print(f"[meta_ads] erreur pour '{query}': {e}")
+        return []
     except Exception as e:
         print(f"[meta_ads] erreur pour '{query}': {e}")
         return []
