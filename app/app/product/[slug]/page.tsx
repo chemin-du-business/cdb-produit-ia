@@ -512,7 +512,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                     </div>
                     {p.score_breakdown ? (
                       <div className="space-y-4">
-                        {Object.entries(p.score_breakdown).map(([key, val], i) => {
+                        {Object.entries(p.score_breakdown).filter(([k]) => ["tiktok","amazon","google_trends","google_shopping","meta_ads","tiktok_shop"].includes(k)).map(([key, val], i) => {
                           const cfg = SOURCE_COLORS[key] ?? { bar: "bg-black/40", label: key };
                           const max = SOURCE_MAX[key] ?? 20;
                           const pct = Math.min(100, Math.round(((val as number) / max) * 100));

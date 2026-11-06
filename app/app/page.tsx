@@ -79,9 +79,11 @@ const SOURCE_MAX: Record<string, number> = {
   tiktok: 40, amazon: 20, google_trends: 10, google_shopping: 10, meta_ads: 10, tiktok_shop: 10,
 };
 
+const V2_SOURCES = ["tiktok", "amazon", "google_trends", "google_shopping", "meta_ads", "tiktok_shop"];
+
 function ScoreBreakdown({ breakdown }: { breakdown: Product["score_breakdown"] }) {
   if (!breakdown) return null;
-  const entries = Object.entries(breakdown).filter(([, v]) => v !== undefined && v !== null);
+  const entries = Object.entries(breakdown).filter(([k, v]) => V2_SOURCES.includes(k) && v !== undefined && v !== null);
   if (!entries.length) return null;
   return (
     <div className="mt-3 space-y-1.5">
