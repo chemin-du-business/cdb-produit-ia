@@ -405,6 +405,8 @@ function AmazonSignalCard({ amz }: { amz: Record<string, any> }) {
   const topProducts: any[] = amz.top_products ?? [];
 
   if (!avgPrice && !totalReviews && !isBestseller && topProducts.length === 0) return null;
+  const showPrice = avgPrice != null && Number(avgPrice) > 0;
+  const showReviews = totalReviews != null && Number(totalReviews) > 0;
 
   return (
     <Box>
@@ -416,13 +418,13 @@ function AmazonSignalCard({ amz }: { amz: Record<string, any> }) {
         </div>
       </div>
       <div className="flex gap-3 text-sm mb-3">
-        {avgPrice != null && (
+        {showPrice && (
           <div className="flex-1 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
             <div className="text-xs text-white/40 mb-0.5">Prix moyen</div>
             <div className="font-bold text-white/90">{avgPrice}€</div>
           </div>
         )}
-        {totalReviews != null && (
+        {showReviews && (
           <div className="flex-1 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
             <div className="text-xs text-white/40 mb-0.5">Avis clients</div>
             <div className="font-bold text-white/90">{Number(totalReviews).toLocaleString("fr-FR")}</div>

@@ -527,6 +527,7 @@ export default function DashboardPage() {
         source === "all" ? true : (p.sources ?? []).includes(source)
       )
       .filter((p) => status === "all" ? true : (p.status ?? "Émergent") === status)
+      .filter((p) => p.score > 0)
       .filter((p) => p.score >= minScore)
       .filter((p) => {
         if (!query) return true;
