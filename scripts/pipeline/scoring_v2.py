@@ -38,28 +38,54 @@ def score_candidate_v2(
 
     # ── Amazon (35 pts) ─────────────────────────────────────────────────────
     amz = signals.get("amazon") or {}
-    amazon_score = int(round(_clamp(amz.get("demand_score", 0) / 100.0) * 35))
+    amz_results = int(amz.get("results_count") or 0)
+    amz_reviews = int(amz.get("total_reviews") or 0)
+    amz_bestseller = bool(amz.get("has_bestseller") or amz.get("has_bestseller_badge"))
+    amz_choice = bool(amz.get("has_amazon_choice"))
+    # Plancher : si présence sur Amazon → au moins 12 pts
+    if amz_results > 0:
+        amz_base = 12
+        amz_review_pts = _clamp(amz_reviews / 60.0) * 13   # 60 avis = +13 pts
+        amz_badge_pts = 10 if amz_bestseller else (5 if amz_choice else 0)
+        amazon_score = int(round(amz_base + amz_review_pts + amz_badge_pts))
+    else:
+        amazon_score = 0
 
     # ── Google Trends (30 pts) ──────────────────────────────────────────────
     trends = signals.get("google_trends") or {}
-    trends_raw = trends.get("current_value", 0) or 0
-    trends_peak = trends.get("peak_value", 0) or 0
-    # Utilise peak comme référence relative — un produit à 40/100 sur son pic est fort
-    effective_value = trends_raw if trends_peak == 0 else min(100, int((trends_raw / max(trends_peak, 1)) * 100 * 0.7 + trends_raw * 0.3))
-    trends_direction_bonus = {"rising": 1.0, "stable": 0.85, "declining": 0.5, "unknown": 0.75}
+    trends_raw = int(trends.get("current_value") or 0)
     trends_direction = trends.get("trend_direction", "unknown")
-    trends_score = int(round(_clamp(effective_value / 100.0) * trends_direction_bonus.get(trends_direction, 0.75) * 30))
+    dir_mult = {"rising": 1.0, "stable": 0.85, "declining": 0.5, "unknown": 0.75}
+    if trends_raw > 0:
+        trends_score = int(round(_clamp(trends_raw / 100.0) * dir_mult.get(trends_direction, 0.75) * 30))
+        trends_score = max(trends_score, 8)   # plancher 8 si Trends répond
+    else:
+        trends_score = 0
 
     # ── Google Shopping (20 pts) ────────────────────────────────────────────
     shopping = signals.get("google_shopping") or {}
-    shop_raw = shopping.get("market_score", 0) or 0
-    shopping_score = int(round(_clamp(shop_raw / 100.0) * 20))
+    shop_results = int(shopping.get("results_count") or 0)
+    shop_reviews = int(shopping.get("total_reviews") or 0)
+    if shop_results > 0:
+        shop_base = 8
+        shop_review_pts = _clamp(shop_reviews / 100.0) * 8   # 100 avis = +8 pts
+        shop_volume_pts = _clamp(shop_results / 5.0) * 4     # 5 résultats = +4 pts
+        shopping_score = int(round(shop_base + shop_review_pts + shop_volume_pts))
+    else:
+        shopping_score = 0
 
-    google_score = trends_score + shopping_score   # 0..50
+    google_score = trends_score + shopping_score
 
     # ── TikTok Shop (15 pts) ────────────────────────────────────────────────
     tshop = signals.get("tiktok_shop") or {}
-    tshop_score = int(round(_clamp((tshop.get("shop_score", 0) or 0) / 100.0) * 15))
+    tshop_results = int(tshop.get("results_count") or 0)
+    tshop_sales = int(tshop.get("total_sales") or 0)
+    if tshop_results > 0:
+        tshop_base = 5
+        tshop_sales_pts = _clamp(tshop_sales / 100.0) * 10  # 100 ventes = +10 pts
+        tshop_score = int(round(tshop_base + tshop_sales_pts))
+    else:
+        tshop_score = 0
 
     # ── TikTok Discover bonus (0..10 si dispo) ──────────────────────────────
     tiktok_score = min(10, _score_tiktok(signals, max_views, max_likes, max_shares) // 4)
