@@ -319,7 +319,7 @@ function VideoPlayer({
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="absolute bottom-3 right-3 rounded-2xl bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
+              className="absolute bottom-3 right-3 rounded-full bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
             >
               Ouvrir
             </a>
@@ -337,7 +337,7 @@ function VideoPlayer({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-3 right-3 rounded-2xl bg-white/90 px-3 py-2 text-xs font-extrabold text-black hover:bg-white"
+            className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-2 text-xs font-extrabold text-black hover:bg-white"
           >
             Ouvrir
           </a>
@@ -395,7 +395,7 @@ function VideoPlayer({
             console.error("toggle mute error:", err);
           }
         }}
-        className="absolute bottom-3 right-3 z-20 rounded-2xl bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
+        className="absolute bottom-3 right-3 z-20 rounded-full bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
         aria-label={muted ? "Démuter" : "Muter"}
         title={muted ? "Démuter" : "Muter"}
       >
@@ -428,7 +428,7 @@ function MediaHero({ p }: { p: Product }) {
           target="_blank"
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-3 right-3 rounded-2xl bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
+          className="absolute bottom-3 right-3 rounded-full bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
         >
           Ouvrir
         </a>
@@ -632,12 +632,12 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <a href="https://www.chemindubusiness.fr/" className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/10 sm:inline-flex">
+            <a href="https://www.chemindubusiness.fr/" className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/10 sm:inline-flex">
               Formation <CPFBadge />
             </a>
             <button
               onClick={logout}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
               aria-label="Déconnexion"
             >
               <LogoutIcon />
@@ -787,7 +787,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => router.push(`/app/product/${p.slug}`)}
-                      className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 active:scale-[0.98] transition-all"
+                      className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-4 text-sm font-semibold text-white hover:brightness-110 transition"
                     >
                       Voir l’analyse complète →
                     </button>
@@ -839,13 +839,13 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
-                      <div className="shrink-0 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white/70">
+                      <div className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white/70">
                         {p.score}
                       </div>
                       <button
                         type="button"
                         onClick={() => router.push(`/app/product/${p.slug}`)}
-                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/60 hover:bg-white/10 sm:flex-none"
+                        className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/60 hover:bg-white/10 sm:flex-none"
                       >
                         <span className="block truncate sm:truncate-none">En savoir plus</span>
                       </button>

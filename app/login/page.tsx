@@ -110,7 +110,7 @@ export default function LoginPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="rounded-2xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-semibold text-black/80 hover:bg-white"
+              className="inline-flex h-9 items-center rounded-full border border-black/10 bg-white/80 px-4 text-sm font-semibold text-black/80 hover:bg-white transition"
             >
               Retour
             </Link>
@@ -155,7 +155,7 @@ export default function LoginPage() {
             <button
               onClick={loginGoogle}
               disabled={loading}
-              className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white hover:bg-black/90 disabled:opacity-60"
+              className="mt-6 inline-flex h-11 w-full items-center justify-center gap-3 rounded-full bg-black px-4 text-sm font-semibold text-white hover:bg-black/90 disabled:opacity-60 transition"
             >
               <GoogleIcon />
               <span>Continuer avec Google</span>
@@ -167,9 +167,9 @@ export default function LoginPage() {
               <div className="h-px flex-1 bg-black/10" />
             </div>
 
-            <div className="flex rounded-2xl border border-black/10 bg-black/[0.03] p-1 text-xs font-semibold">
-              <button type="button" onClick={() => setMode("magic")} className={`flex-1 rounded-xl py-2 transition-colors ${mode === "magic" ? "bg-white shadow-sm text-black" : "text-black/50"}`}>Lien magique</button>
-              <button type="button" onClick={() => setMode("password")} className={`flex-1 rounded-xl py-2 transition-colors ${mode === "password" ? "bg-white shadow-sm text-black" : "text-black/50"}`}>Email + mot de passe</button>
+            <div className="flex rounded-full border border-black/10 bg-black/[0.03] p-1 text-xs font-semibold">
+              <button type="button" onClick={() => setMode("magic")} className={`flex-1 rounded-full py-2 transition-colors ${mode === "magic" ? "bg-white shadow-sm text-black" : "text-black/50"}`}>Lien magique</button>
+              <button type="button" onClick={() => setMode("password")} className={`flex-1 rounded-full py-2 transition-colors ${mode === "password" ? "bg-white shadow-sm text-black" : "text-black/50"}`}>Email + mot de passe</button>
             </div>
 
             <form onSubmit={loginMagic} className="space-y-3">
@@ -179,7 +179,7 @@ export default function LoginPage() {
                 type="email"
                 required
                 placeholder="ton@email.com"
-                className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none ring-black/10 focus:ring-2"
+                className="w-full rounded-full border border-black/10 bg-white px-4 py-3 text-sm outline-none ring-black/10 focus:ring-2"
               />
               {mode === "password" && (
                 <input
@@ -188,13 +188,13 @@ export default function LoginPage() {
                   type="password"
                   required
                   placeholder="Mot de passe"
-                  className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none ring-black/10 focus:ring-2"
+                  className="w-full rounded-full border border-black/10 bg-white px-4 py-3 text-sm outline-none ring-black/10 focus:ring-2"
                 />
               )}
               <button
                 type="submit"
                 disabled={loading}
-                className="inline-flex w-full items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black/80 hover:bg-white/90 disabled:opacity-60"
+                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-black/10 bg-white px-4 text-sm font-semibold text-black/80 hover:bg-white/90 disabled:opacity-60 transition"
               >
                 {mode === "password" ? "Se connecter" : "Recevoir un lien de connexion"}
               </button>

@@ -225,7 +225,7 @@ function ProductMedia({
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/55 to-transparent" />
 
-        <div className="absolute right-3 top-3 rounded-2xl bg-black px-3 py-2 text-xs font-extrabold text-white">
+        <div className="absolute right-3 top-3 rounded-full bg-black px-3 py-2 text-xs font-extrabold text-white">
           {score}/100
         </div>
 
@@ -259,7 +259,7 @@ function ProductMedia({
                 console.error("toggle mute error:", err);
               }
             }}
-            className="absolute bottom-3 right-3 rounded-2xl bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
+            className="absolute bottom-3 right-3 rounded-full bg-black/90 px-3 py-2 text-xs font-extrabold text-white hover:bg-black"
             aria-label={muted ? "Activer le son" : "Couper le son"}
             title={muted ? "Activer le son" : "Couper le son"}
           >
@@ -272,7 +272,7 @@ function ProductMedia({
             href={sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="absolute bottom-3 left-3 rounded-2xl bg-white/90 px-3 py-2 text-xs font-extrabold text-black hover:bg-white"
+            className="absolute bottom-3 left-3 rounded-full bg-white/90 px-3 py-2 text-xs font-extrabold text-black hover:bg-white"
           >
             Voir la source
           </a>
@@ -528,7 +528,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className="relative flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-colors"
+                  className="relative flex-1 rounded-full px-3 py-2 text-xs font-semibold transition-colors"
                 >
                   {activeTab === tab.id && (
                     <motion.div
@@ -745,7 +745,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5 backdrop-blur">
             <div className="text-sm font-semibold text-white/80">🎓 Formation e-commerce</div>
             <div className="mt-1 text-sm text-white/50">Apprends la méthode complète pour lancer et scaler proprement.</div>
-            <a href="https://www.chemindubusiness.fr/" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+            <a href="https://www.chemindubusiness.fr/" className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white hover:brightness-110">
               <span>Voir la formation</span>
               <CPFBadge />
             </a>
@@ -753,7 +753,7 @@ function ProductDetailInner({ p, positioning, hooks, objections, ugc, risks, rec
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5 backdrop-blur">
             <div className="text-sm font-semibold text-white/80">🎬 App CDB Video IA</div>
             <div className="mt-1 text-sm text-white/50">Crée des vidéos ads vite pour tester tes produits.</div>
-            <a href="https://cdbvideoia.com/" className="mt-4 inline-flex rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 hover:bg-white/10">
+            <a href="https://cdbvideoia.com/" className="mt-4 inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/70 hover:bg-white/10">
               Accéder à CDB Video IA
             </a>
           </div>
@@ -819,7 +819,7 @@ export default function ProductPage() {
         <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-6 text-center">
           <p className="text-sm text-white/60">Produit introuvable.</p>
           <Link
-            className="mt-4 inline-block rounded-xl bg-gradient-to-r from-violet-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white"
+            className="mt-4 inline-block rounded-full bg-gradient-to-r from-violet-600 to-orange-500 px-4 py-2 text-sm font-semibold text-white"
             href="/app"
           >
             Retour dashboard
